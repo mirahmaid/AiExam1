@@ -1,0 +1,25 @@
+{
+  "name": "ai-exam",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @ai-exam/api\" \"npm run dev -w @ai-exam/web\"",
+    "build": "npm run build -w @ai-exam/types && npm run build -w @ai-exam/api && npm run build -w @ai-exam/web",
+    "lint": "npm run lint -w @ai-exam/api && npm run lint -w @ai-exam/web",
+    "test": "npm run test -w @ai-exam/api",
+    "typecheck": "npm run build -w @ai-exam/types && npm run typecheck -w @ai-exam/api && npm run typecheck -w @ai-exam/web",
+    "services:up": "docker compose up -d",
+    "services:down": "docker compose down",
+    "db:setup": "npm run prisma:deploy -w @ai-exam/api && npm run prisma:seed -w @ai-exam/api",
+    "postinstall": "npm run build -w @ai-exam/types && npm run prisma:generate -w @ai-exam/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}

@@ -1,0 +1,342 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "rhel-openssl-3.0.x"]
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum ExamFileStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum StagedQuestionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DifficultyLevel {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum BloomTaxonomyLevel {
+  REMEMBER
+  UNDERSTAND
+  APPLY
+  ANALYZE
+  EVALUATE
+  CREATE
+}
+
+enum EmbeddingStatus {
+  PENDING
+  INDEXED
+  FAILED
+}
+
+model User {
+  id                    String         @id @default(cuid())
+  email                 String         @unique
+  passwordHash          String?
+  name                  String?
+  role                  Role           @default(STUDENT)
+  avatar                String?
+  branchId              String?
+  branch                Branch?        @relation(fields: [branchId], references: [id])
+  twoFactorEnabled      Boolean        @default(false)
+  twoFactorSecret       String?
+  twoFactorRecoveryCodes String[]      @default([]) 
+  emailVerified         Boolean        @default(false) 
+  oauthProvider         String?        
+  oauthProviderId       String?        
+  refreshTokens         RefreshToken[]
+  uploadedExamFiles     ExamFile[]     
+  styleUploads          StyleSourceUpload[]  @relation("StudentStyleUploads")
+  generatedQuestions    GeneratedQuestion[]  @relation("StudentGeneratedQuestions")
+  chatSessions          ChatSession[]  @relation("StudentChatSessions")
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@unique([oauthProvider, oauthProviderId])
+  @@index([branchId])
+}
+
+// Model for storing server-side refresh tokens (hash only, never the raw token)
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String    
+  tokenHash String    @unique 
+  expiresAt DateTime  
+  revokedAt DateTime? 
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+model Branch {
+  id               String             @id @default(cuid())
+  name             String             @unique
+  subjects         Subject[]
+  users            User[]
+  examFiles        ExamFile[]
+  examBankQuestions ExamBankQuestion[]
+  createdAt        DateTime           @default(now())
+}
+
+model Subject {
+  id               String             @id @default(cuid())
+  name             String
+  branchId         String
+  bookPdfKey       String?            
+  bookPdfOriginalName String?         
+  bookPdfSize      Int?               
+  branch           Branch             @relation(fields: [branchId], references: [id])
+  examFiles          ExamFile[]
+  examBankQuestions  ExamBankQuestion[]
+  generatedQuestions GeneratedQuestion[]
+  chatSessions       ChatSession[]
+  teachers           Teacher[]
+  createdAt          DateTime           @default(now())
+
+  @@unique([name, branchId])
+  @@index([branchId])
+}
+
+
+model ExamFile {
+  id              String          @id @default(cuid())
+  originalName    String          
+  s3Key           String          @unique 
+  mimeType        String          @default("application/pdf")
+  fileSize        Int             
+  status          ExamFileStatus  @default(PENDING)
+  errorLog        String?         
+  branchId        String
+  subjectId       String
+  year            Int
+  term            String          
+  uploadedBy      String          
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  branch          Branch          @relation(fields: [branchId], references: [id])
+  subject         Subject         @relation(fields: [subjectId], references: [id])
+  uploader        User            @relation(fields: [uploadedBy], references: [id])
+  stagedQuestions StagedQuestion[]
+
+  @@index([branchId])
+  @@index([subjectId])
+  @@index([status])
+  @@index([uploadedBy])
+}
+
+/// Questions extracted by Gemini from a PDF, awaiting human review
+model StagedQuestion {
+  id              String                @id @default(cuid())
+  examFileId      String
+  questionText    String                
+  choices         Json                  
+  correctAnswer   String                
+  explanation     String?               
+  status          StagedQuestionStatus  @default(PENDING)
+  reviewedBy      String?               
+  reviewedAt      DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  examFile        ExamFile              @relation(fields: [examFileId], references: [id], onDelete: Cascade)
+
+  @@index([examFileId])
+  @@index([status])
+  @@index([status, createdAt])
+}
+
+/// Approved, published exam bank question with vector embedding for hybrid search
+model ExamBankQuestion {
+  id              String              @id @default(cuid())
+  questionText    String
+  choices         Json
+  correctAnswer   String
+  explanation     String?
+  branchId        String
+  subjectId       String
+  year            Int
+  term            String
+  difficulty      DifficultyLevel
+  bloomTaxonomy   BloomTaxonomyLevel
+  topicId         String?             // Optional topic tag / free-text label
+  sourceFileId    String?             // Reference to original ExamFile
+  embeddingStatus EmbeddingStatus     @default(PENDING)
+  // Vector embedding (768 dimensions)
+  embedding       Float[]             @default([])
+  // tsvector column for full-text search (auto-populated by PostgreSQL trigger / queries)
+  searchVector    Unsupported("tsvector")?
+  deletedAt       DateTime?           // Soft delete timestamp
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  branch          Branch              @relation(fields: [branchId], references: [id])
+  subject         Subject             @relation(fields: [subjectId], references: [id])
+
+  @@index([branchId])
+  @@index([subjectId])
+  @@index([difficulty])
+  @@index([bloomTaxonomy])
+  @@index([year])
+  @@index([deletedAt])
+  @@index([embeddingStatus])
+  @@index([sourceFileId])
+  // شكل الاستعلام الفعلي بكل مسارات الاسترجاع: deletedAt IS NULL +
+  // subjectId + difficulty. الفهارس المفردة فوق ما بتغطيه.
+  @@index([deletedAt, subjectId, difficulty])
+}
+
+
+enum StyleSourceUploadStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum GeneratedQuestionSourceType {
+  BANK_RAG
+  UPLOAD_STYLE_MATCH
+}
+
+/// Ephemeral upload of a student's style-source sheet (PDF / image).
+/// The raw file in S3 is automatically purged after 24 hours via lifecycle rule.
+model StyleSourceUpload {
+  id          String                   @id @default(cuid())
+  studentId   String                   // ID of the uploading student
+  s3Key       String                   @unique
+  mimeType    String
+  fileSize    Int
+  status      StyleSourceUploadStatus  @default(PROCESSING)
+  errorLog    String?
+  /// Extracted style blueprint — cached in Redis, persisted here as JSONB fallback
+  styleMatrix Json?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  student           User               @relation("StudentStyleUploads", fields: [studentId], references: [id])
+  generatedQuestions GeneratedQuestion[]
+
+  @@index([studentId])
+  @@index([status])
+}
+
+model GeneratedQuestion {
+  id                String                      @id @default(cuid())
+  studentId         String
+  subjectId         String
+  topicId           String?
+  questionText      String
+  choices           Json                        
+  correctAnswer     String
+  explanation       String?
+  bloomTaxonomy     BloomTaxonomyLevel?
+  difficulty        DifficultyLevel?
+  sourceType        GeneratedQuestionSourceType @default(BANK_RAG)
+  /// JSONB provenance: { styleUploadId?, bankQuestionIds: string[] }
+  referenceMetadata Json?
+  styleUploadId     String?
+  createdAt         DateTime                    @default(now())
+
+  student     User               @relation("StudentGeneratedQuestions", fields: [studentId], references: [id])
+  subject     Subject            @relation(fields: [subjectId], references: [id])
+  styleUpload StyleSourceUpload? @relation(fields: [styleUploadId], references: [id])
+
+  @@index([studentId])
+  @@index([subjectId])
+  @@index([sourceType])
+  @@index([styleUploadId])
+}
+
+
+enum ChatMessageRole {
+  STUDENT
+  ASSISTANT
+  SYSTEM
+}
+
+enum ChatMessageType {
+  TEXT            
+  FILE_UPLOAD     
+  QUESTIONS       
+  ERROR           
+}
+
+model ChatSession {
+  id          String        @id @default(cuid())
+  studentId   String
+  subjectId   String
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  student     User          @relation("StudentChatSessions", fields: [studentId], references: [id])
+  subject     Subject       @relation(fields: [subjectId], references: [id])
+  messages    ChatMessage[]
+
+  @@index([studentId])
+  @@index([subjectId])
+  @@index([studentId, subjectId])
+  @@index([studentId, updatedAt])
+}
+
+model ChatMessage {
+  id            String          @id @default(cuid())
+  sessionId     String
+  role          ChatMessageRole
+  type          ChatMessageType @default(TEXT)
+  content       String          
+  fileUrl       String?         
+  fileMimeType  String?         
+  metadata      Json?           
+  createdAt     DateTime        @default(now())
+
+  session       ChatSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([sessionId, createdAt])
+}
+
+model Teacher {
+  id                String    @id @default(cuid())
+  name              String    
+  title             String    
+  bio               String    
+  imageUrl          String?   
+  imageKey          String?   
+  subjectId         String?   
+  yearsOfExperience Int?      
+  isActive          Boolean   @default(true) 
+  displayOrder      Int       @default(0)    
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  subject           Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@index([subjectId])
+  @@index([isActive])
+  @@index([displayOrder])
+  @@index([isActive, displayOrder])
+}
+

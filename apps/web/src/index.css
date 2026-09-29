@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Ubuntu Regular */
+@font-face {
+  font-family: "Ubuntu";
+  src: url("./assets/fonts/Ubuntu-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Ubuntu Light */
+@font-face {
+  font-family: "Ubuntu";
+  src: url("./assets/fonts/Ubuntu-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Ubuntu Medium */
+@font-face {
+  font-family: "Ubuntu";
+  src: url("./assets/fonts/Ubuntu-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Ubuntu Bold */
+@font-face {
+  font-family: "Ubuntu";
+  src: url("./assets/fonts/Ubuntu-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Ubuntu Italic */
+@font-face {
+  font-family: "Ubuntu";
+  src: url("./assets/fonts/Ubuntu-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Ubuntu Light Italic */
+@font-face {
+  font-family: "Ubuntu";
+  src: url("./assets/fonts/Ubuntu-LightItalic.ttf") format("truetype");
+  font-weight: 300;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Ubuntu Medium Italic */
+@font-face {
+  font-family: "Ubuntu";
+  src: url("./assets/fonts/Ubuntu-MediumItalic.ttf") format("truetype");
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Ubuntu Bold Italic */
+@font-face {
+  font-family: "Ubuntu";
+  src: url("./assets/fonts/Ubuntu-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Ubuntu */
+.font-Ubuntu {
+  font-family: "Ubuntu", sans-serif;
+}
+@theme {
+  --font-sans: "Ubuntu", sans-serif;
+}
+.books-bullet {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background-color: #e2e8f0;
+  display: inline-block;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.books-bullet-active {
+  width: 24px;
+  background: linear-gradient(90deg, #001b3a, #0f2a4a);
+}
+.subjects-slider .swiper-wrapper {
+  transition-timing-function: linear !important;
+}

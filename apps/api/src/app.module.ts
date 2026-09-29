@@ -1,0 +1,82 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
+import { BullModule } from '@nestjs/bullmq';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { PrismaModule } from './prisma/prisma.module';
+import { RedisModule } from './redis/redis.module';
+import { MailModule } from './mail/mail.module';
+import { CommonModule } from './common/common.module';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
+import { BranchModule } from './branch/branch.module';
+import { SubjectModule } from './subject/subject.module';
+import { ExamBankModule } from './exam-bank/exam-bank.module';
+import { QuestionsModule } from './questions/questions.module';
+import { ChatModule } from './chat/chat.module';
+import { TeachersModule } from './teachers/teachers.module';
+import { validateEnv } from './config/env.validation';
+import { QUEUES_ENABLED } from './common/queues';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    EventEmitterModule.forRoot(),
+    ScheduleModule.forRoot(),
+    ...(QUEUES_ENABLED
+      ? [BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (config: ConfigService) => {
+        const redisUrl = config.get<string>(
+          'REDIS_URL',
+          'redis://localhost:6379',
+        );
+        const url = new URL(redisUrl);
+        // Redis مطلوب بس لمهام الخلفية (استخراج الامتحانات، التضمين،
+        // تحليل النمط). بدونه التطبيق بيشتغل عادي — بس لازم يفشل بهدوء
+        // ووضوح بدل ما يفضل يحاول الاتصال للأبد وقت الإقلاع.
+        const isProduction = config.get<string>('NODE_ENV') === 'production';
+        return {
+          connection: {
+            host: url.hostname,
+            port: parseInt(url.port || '6379', 10),
+            username: url.username || undefined,
+            password: url.password || undefined,
+            tls:
+              url.protocol === 'rediss:'
+                ? { rejectUnauthorized: false }
+                : undefined,
+            maxRetriesPerRequest: null,
+            // ما بيتصل لحد ما تنطلب أول مهمة
+            lazyConnect: true,
+            // بالإنتاج منضل نحاول؛ بالتطوير منوقف بعد محاولتين حتى ما
+            // يغرق الـ log بـ ECONNREFUSED لما ما يكون Redis شغّال
+            retryStrategy: (times: number) =>
+              isProduction || times <= 2 ? Math.min(times * 500, 3000) : null,
+            // بدون هيك، .add() بتعلّق للأبد بدل ما ترمي خطأ واضح
+            enableOfflineQueue: isProduction,
+          },
+        };
+      },
+      inject: [ConfigService],
+        })]
+      : []),
+    PrismaModule,
+    RedisModule,
+    MailModule,
+    CommonModule,
+    AuthModule,
+    UsersModule,
+    BranchModule,
+    SubjectModule,
+    ExamBankModule,
+    QuestionsModule,
+    ChatModule,
+    TeachersModule,
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
