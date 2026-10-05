@@ -12,6 +12,14 @@ export interface BankQuestionAnchor {
   difficulty: string;
 }
 
+/** مقطع من الكتاب المدرسي الرسمي — مرجع للمحتوى */
+export interface TextbookPassage {
+  section: string | null;
+  pageStart: number;
+  pageEnd: number;
+  text: string;
+}
+
 export interface SubjectWithBranch {
   id?: string;
   name: string;
@@ -48,9 +56,20 @@ export class GenerationPromptBuilder {
     difficulty: string,
     bloomTaxonomy: string | undefined,
     count: number,
+    passages: TextbookPassage[] = [],
   ): string {
     const { subjectName, branchName } = extractSubjectAndBranch(subject);
     const topicText = topicId ?? 'General curriculum topics for this subject';
+
+    const passageSection = passages.length
+      ? `\n\nOFFICIAL TEXTBOOK PASSAGES FOR "${subjectName}" (ministry textbook — the facts, definitions, values and notation in your questions MUST agree with these):
+${passages
+  .map(
+    (p, i) =>
+      `[Passage ${i + 1}]${p.section ? ` ${p.section}` : ''} (p. ${p.pageStart}${p.pageEnd !== p.pageStart ? `–${p.pageEnd}` : ''})\n${p.text}`,
+  )
+  .join('\n\n')}`
+      : '';
 
     const anchorSection =
       anchors.length > 0
@@ -65,7 +84,9 @@ Correct Answer: ${q.correctAnswer}
 ${q.explanation ? `Explanation: ${q.explanation}` : ''}`.trim(),
   )
   .join('\n\n')}`
-        : `No reference questions available from the bank for "${subjectName}". Generate strictly from official Palestinian "${subjectName}" curriculum knowledge.`;
+        : passages.length
+          ? `No reference questions available from the bank for "${subjectName}". Base every question on the textbook passages below and follow official Palestinian board exam style.`
+          : `No reference questions available from the bank for "${subjectName}". Generate strictly from official Palestinian "${subjectName}" curriculum knowledge.`;
 
     return `You are an expert Palestinian Tawjihi exam creator (منهاج التوجيهي الفلسطيني - وزارة التربية والتعليم) strictly for the subject: "${subjectName}" (Branch / الفرع: "${branchName}").
 
@@ -92,7 +113,7 @@ CRITICAL FORMATTING RULES:
 4. Provide a concise, educationally rigorous explanation for the correct answer grounded in the Palestinian textbook.
 5. Do NOT reproduce any reference question verbatim — use them as style, depth, and terminology anchors.
 
-${anchorSection}
+${anchorSection}${passageSection}
 
 Generate ${count} NEW, ORIGINAL questions strictly aligned with the Palestinian Curriculum (منهاج التوجيهي الفلسطيني - وزارة التربية والتعليم) for "${subjectName}". Respond with valid JSON only.`;
   }

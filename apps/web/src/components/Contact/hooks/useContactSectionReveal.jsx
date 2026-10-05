@@ -8,70 +8,27 @@ export function useContactSectionReveal() {
   const sectionRef = useRef(null);
 
   useLayoutEffect(() => {
+    // إذا المستخدم مفعّل "تقليل الحركة" ما نحرّك شي
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
     const ctx = gsap.context(() => {
-      gsap.fromTo(
-        ".contact-eyebrow",
-        { opacity: 0, y: 10 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.55,
-          ease: "power2.out",
+      // حركة واحدة متسلسلة: العنوان ← البطاقة ← الحقول
+      gsap
+        .timeline({
+          defaults: { ease: "power2.out" },
           scrollTrigger: {
             trigger: sectionRef.current,
-            start: "top 80%",
+            start: "top 75%",
+            once: true,
           },
-        }
-      );
-
-      gsap.fromTo(
-        ".contact-title",
-        { opacity: 0, y: 18 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.65,
-          ease: "power2.out",
-          delay: 0.08,
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: "top 80%",
-          },
-        }
-      );
-
-      gsap.fromTo(
-        ".contact-cta",
-        { opacity: 0, y: 14 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.65,
-          ease: "power2.out",
-          delay: 0.16,
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: "top 80%",
-          },
-        }
-      );
-
-      gsap.fromTo(
-        ".contact-field",
-        { opacity: 0, y: 16 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.55,
-          ease: "power2.out",
-          stagger: 0.09,
-          delay: 0.24,
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: "top 78%",
-          },
-        }
-      );
+        })
+        .from(".contact-intro", { autoAlpha: 0, y: 16, duration: 0.6 })
+        .from(".contact-shell", { autoAlpha: 0, y: 24, duration: 0.7 }, "-=0.3")
+        .from(
+          ".contact-field",
+          { autoAlpha: 0, y: 10, duration: 0.4, stagger: 0.07 },
+          "-=0.4"
+        );
     }, sectionRef);
 
     return () => ctx.revert();

@@ -1,4 +1,5 @@
 import { resolveExamMimeType } from './file-type.util';
+import { decodeUploadName } from './file-type.util';
 
 describe('file-type.util', () => {
   it('should resolve canonical PDF from standard mimetype', () => {
@@ -86,5 +87,22 @@ describe('file-type.util', () => {
       buffer: Buffer.from('hello world'),
     } as Express.Multer.File;
     expect(resolveExamMimeType(txtFile)).toBeNull();
+  });
+});
+
+describe('decodeUploadName', () => {
+  const asMulter = (s: string) => Buffer.from(s, 'utf8').toString('latin1');
+
+  it('recovers UTF-8 names that multer decoded as latin1', () => {
+    expect(decodeUploadName(asMulter('اللغة العربية - الكتاب الأول.pdf'))).toBe('اللغة العربية - الكتاب الأول.pdf');
+  });
+
+  it('leaves plain ASCII and genuine latin1 names alone', () => {
+    expect(decodeUploadName('exam_2025.pdf')).toBe('exam_2025.pdf');
+    expect(decodeUploadName('café.pdf')).toBe('café.pdf');
+  });
+
+  it('leaves names that are already proper Unicode alone', () => {
+    expect(decodeUploadName('كيمياء.pdf')).toBe('كيمياء.pdf');
   });
 });

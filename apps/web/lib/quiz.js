@@ -90,27 +90,3 @@ export function takeQuizHandoff() {
     return null;
   }
 }
-
-// ================== الحصة اليومية للتوليد بالذكاء الاصطناعي ==================
-
-const QUOTA_ENDPOINT = "/api/quiz/quota";
-
-export async function getQuota() {
-  const res = await fetch(QUOTA_ENDPOINT, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (!res.ok) {
-    throw new Error(`فشل تحميل الحصة: ${res.status}`);
-  }
-
-  const data = await res.json();
-
-  return {
-    remaining: data.remaining,
-    quotaLimit: data.quotaLimit ?? data.limit,
-  };
-}

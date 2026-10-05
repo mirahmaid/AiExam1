@@ -90,7 +90,10 @@ describe('HybridSearchService', () => {
       limit: 10,
     });
 
-    expect(gemini.generateEmbedding).toHaveBeenCalledWith('calculus derivatives');
+    expect(gemini.generateEmbedding).toHaveBeenCalledWith(
+      'calculus derivatives',
+      'query',
+    );
     expect(result.data).toBeDefined();
     expect(result.data.length).toBeGreaterThan(0);
     // q-1 should rank highest due to combined vector match + keyword match

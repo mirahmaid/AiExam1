@@ -117,7 +117,10 @@ export class HybridSearchService {
 
     // ── Hybrid RRF Search Mode ──
     // 1. Generate query embedding via Gemini (768 dimensions)
-    const queryEmbedding = await this.gemini.generateEmbedding(query);
+    const queryEmbedding = await this.gemini.generateEmbedding(
+      query,
+      'query',
+    );
 
     // 2. Fetch candidate ids + embeddings only.
     //

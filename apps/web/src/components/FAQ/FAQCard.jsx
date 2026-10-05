@@ -1,71 +1,29 @@
-import { motion } from "framer-motion";
-
-export default function FAQCard({ item, isOpen, onToggle, index }) {
+// زر السؤال المقترح (نقطة ملوّنة مثل محطات المسار)
+export default function FAQCard({ item, isActive, onClick, accent }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 80 }}
-      whileInView={{ opacity: 1, x: 0 }}
-      viewport={{ once: true, amount: 0.1 }}
-      transition={{
-        duration: 1.2,
-        delay: index * 0.25,
-        ease: [0.16, 1, 0.3, 1],
-      }}
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={isActive}
       className={[
-        "rounded-tr-[320px] rounded-br-[320px] rounded-bl-[640px] rounded-tl-[40px]",
-        "transition-colors duration-300 w-full overflow-hidden",
-        "shadow-[0_10px_30px_rgba(0,0,0,0.04)]",
-        isOpen
-          ? "bg-[#eaf4fb]"
-          : "bg-[#f8fbff] hover:bg-[#f0f6fc]",
+        "flex items-center gap-2.5 rounded-full border px-4 py-2.5 text-right text-[13px] font-bold leading-5",
+        "transition-all duration-300 hover:-translate-y-0.5",
+        "focus:outline-none focus-visible:ring-4 focus-visible:ring-[#0F8B78]/20",
+        isActive
+          ? "border-[#0F2A4A] bg-[#0F2A4A] text-white shadow-[0_10px_24px_-14px_rgba(15,42,74,0.7)]"
+          : "border-[#DCE7F0] bg-white text-[#334E68] hover:border-[#0F8B78]/40",
       ].join(" ")}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between p-5 md:px-8 md:py-6 text-right focus:outline-none"
-      >
-        <span className="text-[#16233f] font-extrabold text-base md:text-lg">
-          {item.question}
-        </span>
+      <span
+        aria-hidden="true"
+        className="h-2.5 w-2.5 shrink-0 rounded-full"
+        style={{
+          backgroundColor: accent,
+          boxShadow: isActive ? `0 0 10px ${accent}` : "none",
+        }}
+      />
 
-        <div
-          className={[
-            "w-8 h-8 flex items-center justify-center rounded-full transition-transform duration-300",
-            isOpen
-              ? "rotate-180 text-[#16233f]"
-              : "text-[#4b5975]",
-          ].join(" ")}
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
-        </div>
-      </button>
-
-      <div
-        className={`grid transition-all duration-300 ease-in-out overflow-hidden ${
-          isOpen
-            ? "grid-rows-[1fr] opacity-100 pb-6 px-6 md:px-8"
-            : "grid-rows-[0fr] opacity-0"
-        }`}
-      >
-        <div className="overflow-hidden">
-          <p className="text-gray-600 text-sm md:text-[15px] leading-relaxed border-t border-gray-200/60 pt-4">
-            {item.answer}
-          </p>
-        </div>
-      </div>
-    </motion.div>
+      {item.question}
+    </button>
   );
 }

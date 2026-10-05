@@ -13,6 +13,13 @@ import {
 import { GenerateQuestionsDto } from '../dto/generate-questions.dto';
 import { ReferenceMetadata } from '../interfaces/generated-question.interface';
 import { DifficultyLevel, BloomTaxonomyLevel, Prisma } from '@prisma/client';
+import {
+  KnowledgeRetrievalService,
+  RetrievedChunk,
+} from '../../knowledge/services/knowledge-retrieval.service';
+
+/** كم مقطع من الكتاب المدرسي منحط بالـ prompt */
+const MAX_TEXTBOOK_PASSAGES = 4;
 
 function cosineSimilarity(a: number[], b: number[]): number {
   if (!a || !b || a.length === 0 || b.length === 0) return 0;
@@ -38,6 +45,7 @@ export class QuestionGenerationService {
     private readonly prisma: PrismaService,
     private readonly gemini: GeminiService,
     private readonly promptBuilder: GenerationPromptBuilder,
+    private readonly retrieval: KnowledgeRetrievalService,
   ) {}
 
   /**
@@ -75,7 +83,10 @@ export class QuestionGenerationService {
     // ── 3. Generate query embedding (768d) ──────────────────────
     let queryEmbedding: number[] = [];
     try {
-      queryEmbedding = await this.gemini.generateEmbedding(queryText);
+      queryEmbedding = await this.gemini.generateEmbedding(
+        queryText,
+        'query',
+      );
     } catch (err) {
       this.logger.warn(
         `Embedding generation failed, falling back to metadata filter: ${String(err)}`,
@@ -91,10 +102,18 @@ export class QuestionGenerationService {
       queryEmbedding,
     );
 
-    // Strict Grounding Enforcement: Reject if zero reference questions exist in bank
-    if (anchors.length === 0) {
+    // ── 4b. مقاطع من الكتاب المدرسي (الاسترجاع الهجين) ──────────
+    const passages = await this.retrieveTextbookPassages(
+      subjectId,
+      [subject.name, topicId, bloomTaxonomy ? `مستوى ${bloomTaxonomy}` : ''].filter(Boolean).join(' '),
+      topicId,
+    );
+
+    // Strict grounding: at least one official reference — a bank question or
+    // a passage from the ministry textbook — must exist.
+    if (anchors.length === 0 && passages.length === 0) {
       throw new BadRequestException(
-        `No approved Palestinian exam bank questions found for subject "${subject.name}" (Branch: "${subject.branch?.name ?? 'General'}"). Question generation requires official curriculum references for strict grounding.`,
+        `No approved Palestinian exam bank questions or indexed textbook passages found for subject "${subject.name}" (Branch: "${subject.branch?.name ?? 'General'}"). Question generation requires official curriculum references for strict grounding.`,
       );
     }
 
@@ -108,13 +127,17 @@ export class QuestionGenerationService {
       difficulty,
       bloomTaxonomy,
       count,
+      passages,
     );
 
     // ── 6. Generate questions via Gemini (with self-healing retry)
     const generated = await this.gemini.generateQuestions(prompt, count);
 
     // ── 7. Persist generated questions ─────────────────────────
-    const referenceMetadata: ReferenceMetadata = { bankQuestionIds };
+    const referenceMetadata: ReferenceMetadata = {
+      bankQuestionIds,
+      textbookChunkIds: passages.map((p) => p.id),
+    };
 
     const created = await Promise.all(
       generated.map((q) =>
@@ -150,13 +173,44 @@ export class QuestionGenerationService {
       ),
     );
 
+    if (bankQuestionIds.length) {
+      await this.prisma.examBankQuestion.updateMany({
+        where: { id: { in: bankQuestionIds } },
+        data: { usageCount: { increment: 1 } },
+      });
+    }
+
     this.logger.log(
-      `Generated and persisted ${created.length} questions (BANK_RAG) for student ${studentId}`,
+      `Generated and persisted ${created.length} questions (BANK_RAG, ${anchors.length} bank anchors, ${passages.length} textbook passages) for student ${studentId}`,
     );
 
     return created;
   }
 
+
+  /**
+   * مقاطع الكتاب الأقرب للطلب. الفشل هون ما بيوقف التوليد — أسئلة البنك
+   * لحالها كافية كمرجع.
+   */
+  private async retrieveTextbookPassages(
+    subjectId: string,
+    query: string,
+    unit: string | undefined,
+  ): Promise<RetrievedChunk[]> {
+    try {
+      let passages = unit
+        ? await this.retrieval.search({ subjectId, query, unit, limit: MAX_TEXTBOOK_PASSAGES })
+        : [];
+      // topicId نص حر؛ إذا ما طابق وحدة بالكتاب منبحث بكل المادة
+      if (passages.length === 0) {
+        passages = await this.retrieval.search({ subjectId, query, limit: MAX_TEXTBOOK_PASSAGES });
+      }
+      return passages;
+    } catch (err) {
+      this.logger.warn(`Textbook retrieval failed, continuing with bank anchors only: ${String(err)}`);
+      return [];
+    }
+  }
 
   /**
    * Check if pgvector extension is installed and active in PostgreSQL.

@@ -1,48 +1,74 @@
-function TestimonialCard({ item, isActive }) {
+import { Quote, Trophy } from "lucide-react";
+
+// ألوان محطات المسار في الـ Hero (بطاقة لكل لون)
+const ACCENTS = ["#2DD4BF", "#A78BFA", "#FBBF24"];
+
+function TestimonialCard({ item, index = 0 }) {
+  const accent = ACCENTS[index % ACCENTS.length];
+  const photo = item.image || item.avatar;
+
   return (
-    <article
-      className={[
-        "flex flex-col items-center text-center",
-        "w-full min-h-[420px]",
-        "rounded-[28px] p-6 pt-5",
-        "shadow-[0_10px_30px_rgba(0,44,90,0.06)]",
-        "transition-all duration-300",
-        isActive
-          ? "bg-[#00D4FF1A] shadow-[0_14px_36px_rgba(0,44,90,0.12)] scale-[1.02]"
-          : "bg-white",
-      ].join(" ")}
-    >
+    <li className="group relative flex flex-col justify-between overflow-hidden rounded-3xl border border-[#DCE7F0] bg-white p-7 shadow-[0_20px_50px_-35px_rgba(15,42,74,0.35)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_28px_60px_-30px_rgba(15,42,74,0.4)]">
+      {/* شريط لوني علوي */}
       <span
         aria-hidden="true"
-        className="self-start font-serif text-[38px] font-extrabold leading-none text-[#002C5A] mb-1 opacity-90 -mt-8"
-      >
-        ”
-      </span>
+        className="absolute inset-x-7 top-0 h-[4px] rounded-b-full"
+        style={{ backgroundColor: accent }}
+      />
 
-      <div className="relative w-[110px] h-[110px] rounded-2xl overflow-hidden mb-4 flex-shrink-0">
-        <img
-          src={item.image || item.avatar}
-          alt={item.name}
-          className="w-full h-full object-cover block"
-        />
+      {/* علامة اقتباس خفيفة */}
+      <Quote
+        size={44}
+        aria-hidden="true"
+        className="absolute left-6 top-7 -scale-x-100"
+        style={{ color: accent, opacity: 0.22 }}
+      />
 
+      {/* النص */}
+      <div>
         {item.percentage && (
-          <span className="absolute bottom-1 right-1 bg-[#38B793] text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-md">
+          <span className="mb-5 inline-flex items-center gap-2 rounded-full bg-[#0F2A4A] px-3.5 py-1.5 text-sm font-black text-white">
+            <Trophy size={15} aria-hidden="true" style={{ color: accent }} />
             {item.percentage}
           </span>
         )}
+
+        <p className="line-clamp-4 text-base font-medium leading-8 text-[#1E3A57]">
+          {item.text}
+        </p>
       </div>
 
-      <h3 className="text-[#002C5A] font-extrabold text-lg mb-1">{item.name}</h3>
+      {/* الطالب */}
+      <div className="mt-6 flex items-center gap-3.5 border-t border-[#E7EEF4] pt-5">
+        {photo ? (
+          <img
+            src={photo}
+            alt={item.name}
+            className="h-12 w-12 rounded-full object-cover ring-[3px] ring-offset-2"
+            style={{ "--tw-ring-color": accent }}
+          />
+        ) : (
+          <span
+            className="flex h-12 w-12 items-center justify-center rounded-full text-base font-black text-[#0F2A4A]"
+            style={{ backgroundColor: `${accent}40` }}
+          >
+            {item.name?.charAt(0)}
+          </span>
+        )}
 
-      {item.track && (
-        <p className="text-[#38B793] text-[13px] font-semibold mb-4">{item.track}</p>
-      )}
+        <div className="min-w-0">
+          <p className="truncate text-base font-black text-[#0F2A4A]">
+            {item.name}
+          </p>
 
-      <p className="text-[#767676] text-[12.5px] leading-[1.9] text-center px-1">
-        {item.text}
-      </p>
-    </article>
+          {item.track && (
+            <p className="mt-0.5 truncate text-sm font-bold text-[#0F8B78]">
+              {item.track}
+            </p>
+          )}
+        </div>
+      </div>
+    </li>
   );
 }
 

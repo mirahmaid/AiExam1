@@ -1,5 +1,5 @@
 // دوال التواصل مع الباك اند الخاصة بالكويزات: توليد أسئلة، رصيد التوليد اليومي.
-// المسارات تحت هي أفضل تخمين — عدّليها إذا اختلفت عن الباك اند الحقيقي.
+// المسارات تحت تخمين — عدّلها إذا اختلفت عن الباك اند الحقيقي (شوف تبويب Network).
 import { fetchWithAuth } from "./http";
 
 const GENERATE_QUESTIONS_PATH = "/questions/generate";
@@ -23,7 +23,7 @@ export async function generateQuestions({ subjectId, difficulty, count }) {
     try {
       err.body = await res.json();
     } catch {
-      // تجاهل — ما في body صالح
+      // ما في body صالح
     }
     throw err;
   }
@@ -44,7 +44,8 @@ export async function getQuota() {
     throw err;
   }
 
-  return res.json();
+  const data = await res.json();
+  return { remaining: data.remaining, quotaLimit: data.quotaLimit ?? data.limit };
 }
 
 /** يحوّل أي خطأ لرسالة عربية مفهومة تُعرض للمستخدم مباشرة. */

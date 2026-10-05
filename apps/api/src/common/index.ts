@@ -14,6 +14,7 @@ export {
 export {
   resolveExamMimeType,
   SUPPORTED_EXAM_MIME_TYPES,
+  decodeUploadName,
 } from './file-type.util';
 export type { SupportedExamMimeType } from './file-type.util';
 export { CommonModule } from './common.module';

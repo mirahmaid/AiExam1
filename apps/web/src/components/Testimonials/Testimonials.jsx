@@ -1,76 +1,55 @@
-import { useState } from "react";
-import { Swiper, SwiperSlide } from "swiper/react";
-import { Autoplay, Pagination } from "swiper/modules";
-
-import "swiper/css";
-import "swiper/css/pagination";
+import { motion } from "framer-motion";
 
 import { testimonials } from "../../data";
 import TestimonialCard from "./TestimonialCard";
 
+// عدد القصص الظاهرة (غيّره إذا بدك أكثر أو أقل)
+const MAX_STORIES = 3;
+
 function Testimonials() {
-  const [activeIndex, setActiveIndex] = useState(0);
+  const stories = testimonials.slice(0, MAX_STORIES);
+
+  if (!stories.length) return null;
 
   return (
     <section
       id="success-stories"
       dir="rtl"
-      className="w-full max-w-[1200px] mx-auto px-4 pt-12 pb-10 bg-white overflow-hidden relative"
+      className="w-full bg-[#F7FAFC] py-16 sm:py-20"
     >
-      <h2 className="text-center text-[#002C5A] font-extrabold text-2xl md:text-[32px] leading-snug mb-10">
-        قصص نجاح طلابنا في منصة مسار التميز
-      </h2>
+      <div className="mx-auto max-w-6xl px-5 sm:px-6 lg:px-8">
+        <div className="mx-auto mb-10 max-w-2xl text-center">
+          <h2 className="text-3xl font-black leading-[1.45] text-[#0F2A4A] sm:text-4xl">
+            وراء كل إنجاز
+            <span className="text-[#0F8B78]"> قصة تستحق أن تُروى</span>
+          </h2>
 
-      <div className="w-full pb-10">
-        <Swiper
-          modules={[Autoplay, Pagination]}
-          dir="rtl"
-          loop={true}
-          speed={400}
-          autoplay={{
-            delay: 1800,
-            disableOnInteraction: false,
-            pauseOnMouseEnter: true,
-          }}
-          pagination={{
-            clickable: true,
-            el: ".custom-pagination",
-          }}
-          slidesPerView={1}
-          spaceBetween={20}
-          breakpoints={{
-            640: { slidesPerView: 2, spaceBetween: 20 },
-            1024: { slidesPerView: 3, spaceBetween: 24 },
-            1280: { slidesPerView: 4, spaceBetween: 24 },
-          }}
-          onSlideChange={(swiper) => setActiveIndex(swiper.realIndex)}
-          className="w-full !overflow-visible"
+          <p className="mt-4 text-base font-medium leading-7 text-[#475569] sm:text-lg">
+            طلاب بدأوا من نفس المكان، وكل واحد كمّل رحلته بطريقته.
+          </p>
+
+          {/* مسار صغير بمحطاته الثلاث */}
+          <div aria-hidden="true" className="mt-6 flex items-center justify-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#2DD4BF]" />
+            <span className="w-8 border-t-2 border-dashed border-[#0F2A4A]/20" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#A78BFA]" />
+            <span className="w-8 border-t-2 border-dashed border-[#0F2A4A]/20" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#FBBF24]" />
+          </div>
+        </div>
+
+        <motion.ul
+          initial={{ opacity: 0, y: 14 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.6 }}
+          className="grid gap-5 md:grid-cols-3"
         >
-          {testimonials.map((item, i) => (
-            <SwiperSlide key={item.id} className="h-auto flex">
-              <TestimonialCard item={item} isActive={activeIndex === i} />
-            </SwiperSlide>
+          {stories.map((item, index) => (
+            <TestimonialCard key={item.id} item={item} index={index} />
           ))}
-        </Swiper>
-
-        <div className="custom-pagination flex justify-center items-center gap-2.5 mt-8" />
+        </motion.ul>
       </div>
-
-      <style>{`
-        .custom-pagination .swiper-pagination-bullet {
-          width: 9px;
-          height: 9px;
-          background-color: #d7dde7;
-          opacity: 1;
-          border-radius: 9999px;
-          transition: all 0.2s ease-in-out;
-          cursor: pointer;
-        }
-        .custom-pagination .swiper-pagination-bullet-active {
-          background-color: #002C5A;
-          transform: scale(1.25);
-        }
-      `}</style>
     </section>
   );
 }

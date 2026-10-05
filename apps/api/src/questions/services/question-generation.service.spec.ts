@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { GeminiService } from '../../gemini/gemini.service';
 import { GenerationPromptBuilder } from '../builders/generation-prompt.builder';
 import { DifficultyLevel, BloomTaxonomyLevel } from '@prisma/client';
+import { KnowledgeRetrievalService } from '../../knowledge/services/knowledge-retrieval.service';
 
 const mockPrisma = {
   subject: {
@@ -12,6 +13,7 @@ const mockPrisma = {
   },
   examBankQuestion: {
     findMany: jest.fn(),
+    updateMany: jest.fn(),
   },
   generatedQuestion: {
     create: jest.fn(),
@@ -22,6 +24,10 @@ const mockPrisma = {
 const mockGemini = {
   generateEmbedding: jest.fn(),
   generateQuestions: jest.fn(),
+};
+
+const mockRetrieval = {
+  search: jest.fn(),
 };
 
 const mockPromptBuilder = {
@@ -38,11 +44,14 @@ describe('QuestionGenerationService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: GeminiService, useValue: mockGemini },
         { provide: GenerationPromptBuilder, useValue: mockPromptBuilder },
+        { provide: KnowledgeRetrievalService, useValue: mockRetrieval },
       ],
     }).compile();
 
     service = module.get<QuestionGenerationService>(QuestionGenerationService);
     jest.clearAllMocks();
+    // بدون كتاب مفهرس افتراضياً — الاختبارات القديمة بتفحص مسار البنك
+    mockRetrieval.search.mockResolvedValue([]);
   });
 
   describe('generateFromBank', () => {
@@ -75,6 +84,35 @@ describe('QuestionGenerationService', () => {
       await expect(
         service.generateFromBank('student-1', dto),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('grounds generation on textbook passages when the bank is empty', async () => {
+      mockPrisma.subject.findUnique.mockResolvedValue({ id: 'sub-1', name: 'Math' });
+      mockGemini.generateEmbedding.mockResolvedValue([]);
+      mockPrisma.$queryRawUnsafe.mockResolvedValue([{ exists: false }]);
+      mockPrisma.examBankQuestion.findMany.mockResolvedValue([]);
+      const passage = { id: 'ch-1', section: 'الوحدة 1', pageStart: 3, pageEnd: 3, text: 'نص', documentId: 'd', unit: 'الوحدة 1', score: 1, vectorRank: 1, keywordRank: null };
+      mockRetrieval.search.mockResolvedValue([passage]);
+      mockPromptBuilder.buildBankRagPrompt.mockReturnValue('prompt');
+      mockGemini.generateQuestions.mockResolvedValue([
+        { questionText: 'q', choices: [{ label: 'A', text: '1' }], correctAnswer: 'A', explanation: 'e', bloomTaxonomy: 'APPLY' },
+      ]);
+      mockPrisma.generatedQuestion.create.mockResolvedValue({ id: 'gen-1' });
+
+      await service.generateFromBank('student-1', dto);
+
+      expect(mockPromptBuilder.buildBankRagPrompt).toHaveBeenCalledWith(
+        [], expect.anything(), 'algebra', 'MEDIUM', 'APPLY', 2, [passage],
+      );
+      expect(mockPrisma.generatedQuestion.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            referenceMetadata: { bankQuestionIds: [], textbookChunkIds: ['ch-1'] },
+          }),
+        }),
+      );
+      // ما في أسئلة بنك انستعملت — ما في داعي نحدّث العدّاد
+      expect(mockPrisma.examBankQuestion.updateMany).not.toHaveBeenCalled();
     });
 
     it('should generate and persist questions via happy path', async () => {
@@ -143,6 +181,10 @@ describe('QuestionGenerationService', () => {
 
       expect(result).toHaveLength(1);
       expect(mockGemini.generateEmbedding).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.examBankQuestion.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['bq-1'] } },
+        data: { usageCount: { increment: 1 } },
+      });
       expect(mockGemini.generateQuestions).toHaveBeenCalledWith(
         'Generated prompt',
         2,

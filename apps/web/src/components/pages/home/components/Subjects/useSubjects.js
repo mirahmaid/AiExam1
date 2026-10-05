@@ -1,13 +1,23 @@
 import { useEffect, useState } from "react";
 import { fetchSubjectsByBranch } from "./subjectsApi";
-import {
-  subjectsByBranch,
-  defaultSubjects,
-  BRANCH_IDS,
-} from "./subjectsData";
+import { subjectsByBranch, defaultSubjects, BRANCH_IDS } from "./subjectsData";
 
-const FALLBACK_ICON = "/Subject/subject.png";
+const FALLBACK_ICON = "/Subject/math.png"; // صورة موجودة فعلاً
 const FALLBACK_DESCRIPTION = "";
+
+// أيقونة مخمّنة حسب الاسم للمواد اللي ما لها بيانات محلية
+const ICON_BY_KEYWORD = [
+  ["رياضيات", "/Subject/math.png"],
+  ["عربية", "/Subject/arabic.png"],
+  ["انجليزية", "/Subject/english.png"],
+  ["اسلامية", "/Subject/quran.png"],
+  ["كيمياء", "/Subject/chemistry.png"],
+  ["فيزياء", "/Subject/physics.png"],
+  ["احياء", "/Subject/biology.png"],
+  ["تكنولوجيا", "/Subject/technology.png"],
+  ["تاريخ", "/Subject/history.png"],
+  ["جغرافيا", "/Subject/geography.png"],
+];
 
 // تطبيع النص العربي: إزالة التشكيل، توحيد الهمزات، وإزالة "ال" التعريف من كل كلمة
 function normalizeArabic(text) {
@@ -21,27 +31,26 @@ function normalizeArabic(text) {
     .join(" ");
 }
 
+function guessIcon(name) {
+  const n = normalizeArabic(name);
+  return ICON_BY_KEYWORD.find(([key]) => n.includes(key))?.[1] ?? FALLBACK_ICON;
+}
+
 function mergeWithLocalData(branchId, apiSubjects) {
   const localSubjects = subjectsByBranch[branchId] || [];
 
-  // نطبّع المواد المحلية مرة واحدة بدل تكرار العملية لكل مادة
   const localByNormalizedTitle = new Map(
-    localSubjects.map((local) => [
-      normalizeArabic(local.title),
-      local,
-    ])
+    localSubjects.map((local) => [normalizeArabic(local.title), local])
   );
 
   return apiSubjects.map((apiSubject) => {
-    const localMatch = localByNormalizedTitle.get(
-      normalizeArabic(apiSubject.name)
-    );
+    const localMatch = localByNormalizedTitle.get(normalizeArabic(apiSubject.name));
 
     return {
       id: apiSubject.id,
       title: apiSubject.name,
       description: localMatch?.description ?? FALLBACK_DESCRIPTION,
-      icon: localMatch?.icon ?? FALLBACK_ICON,
+      icon: localMatch?.icon ?? guessIcon(apiSubject.name),
     };
   });
 }
@@ -69,10 +78,7 @@ export function useSubjects(branchId, initialSubjects = null) {
       setError(null);
 
       try {
-        const apiSubjects = await fetchSubjectsByBranch(
-          effectiveBranchId,
-          controller.signal
-        );
+        const apiSubjects = await fetchSubjectsByBranch(effectiveBranchId, controller.signal);
 
         setSubjects(
           apiSubjects.length > 0
@@ -83,12 +89,8 @@ export function useSubjects(branchId, initialSubjects = null) {
         if (err.name === "AbortError") return;
 
         console.error("Failed to load subjects:", err);
-
         setError("تعذر تحميل المواد الدراسية");
-
-        setSubjects(
-          subjectsByBranch[effectiveBranchId] || defaultSubjects
-        );
+        setSubjects(subjectsByBranch[effectiveBranchId] || defaultSubjects);
       } finally {
         setIsLoading(false);
       }
@@ -99,9 +101,5 @@ export function useSubjects(branchId, initialSubjects = null) {
     return () => controller.abort();
   }, [effectiveBranchId, initialSubjects]);
 
-  return {
-    subjects,
-    isLoading,
-    error,
-  };
+  return { subjects, isLoading, error };
 }

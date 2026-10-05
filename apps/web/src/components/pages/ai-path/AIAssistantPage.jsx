@@ -1,13 +1,15 @@
 // AIAssistantPage.jsx — الملف الرئيسي (state + API calls فقط، والعرض مفوّض للـSidebar/ChatArea)
-// ⚠️ هذا الملف لازم يحل مكان محتوى src/components/pages/ai-path/AIAssistantPage.jsx بالكامل
-// (هو الملف يلي App.jsx فعلياً بيستورده لراوت /ai-path)
+// مكانه: src/components/pages/ai-path/AIAssistantPage.jsx  (App.jsx بيستورده لراوت /ai-path)
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { X } from "lucide-react";
+
+import AppShell from "@/components/layout/AppShell";
 
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../ui/ToastProvider";
 import { useSubjects } from "../home/components/Subjects/useSubjects";
+import { AI_TOOLS } from "../home/components/Book/aiTools";
 import {
   closeChatSession,
   createChatSession,
@@ -22,7 +24,7 @@ import ChatArea from "./ChatArea";
 
 export default function AIAssistantPage() {
   const [params, setParams] = useSearchParams();
-  const navigate = useNavigate();
+  const location = useLocation(); // AiStudyLab بيبعت { tool, subjectId, subjectTitle }
   const { showToast } = useToast();
   const { selectedBranch } = useAuth();
   const { subjects, isLoading: subjectsLoading } = useSubjects(selectedBranch?.id);
@@ -35,6 +37,7 @@ export default function AIAssistantPage() {
   const [input, setInput] = useState("");
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
+  const [activeTool, setActiveTool] = useState(location.state?.tool ?? null);
   const [sidebarOpen, setSidebarOpen] = useState(false); // درج الموبايل
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false); // طي السايدبار بالديسكتوب
 
@@ -91,13 +94,18 @@ export default function AIAssistantPage() {
 
   useEffect(() => { refreshSessions(); }, [refreshSessions]);
 
+  // فتح مادة تلقائياً: إما جاية من AiStudyLab (location.state) أو من ?subject=
   useEffect(() => {
-    const subjectId = params.get("subject");
-    if (subjectId && !openedFromParam.current) {
-      openedFromParam.current = true;
-      openSession(subjectId);
-    }
-  }, [params, openSession]);
+    if (openedFromParam.current) return;
+    const state = location.state;
+    const subjectId = state?.subjectId ?? params.get("subject");
+    if (!subjectId) return;
+    openedFromParam.current = true;
+    openSession(subjectId).then(() => {
+      const tool = AI_TOOLS.find((t) => t.id === state?.tool);
+      if (tool) setInput(tool.demo(`كتاب ${state?.subjectTitle ?? ""}`.trim()).you);
+    });
+  }, [params, location.state, openSession]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -106,7 +114,7 @@ export default function AIAssistantPage() {
   async function send(text) {
     if (sending) return;
     if (!active) {
-      showToast({ type: "info", message: "اختاري مادة أولاً من زر \"اختيار المادة\"" });
+      showToast({ type: "info", message: "اختر مادة أولاً من المدار أو من زر \"اختيار المادة\"" });
       return;
     }
     const content = (text ?? input).trim();
@@ -166,8 +174,15 @@ export default function AIAssistantPage() {
   };
 
   return (
-    // ⚠️ ضفت bg-[#00D4FF0D] هون كخلفية للسكشن كامل (خفيفة جداً لأنها شفافة ~5%)
-    <div className="mx-auto flex h-[calc(100dvh-4rem)] max-w-7xl gap-0 bg-[#00D4FF0D] px-0 sm:px-4 lg:h-[calc(100dvh-5rem)] lg:gap-4 lg:px-8 lg:py-4">
+    <AppShell>
+    {/* الارتفاع: غيّر 6rem/7.5rem حسب طول الهيدر عندك */}
+    {/* عرض 1280px متوسّط حتى لو الـAppShell أضيق (margin-inline-start بيشتغل مع RTL و LTR) */}
+    {/* الارتفاع: غيّر 8rem/8.5rem حسب الهيدر + padding الـAppShell عندك */}
+    <div
+      dir="rtl"
+      style={{ width: "min(1280px, 96vw)", marginInlineStart: "calc(50% - min(1280px, 96vw) / 2)" }}
+      className="flex h-[calc(100dvh-8rem)] min-h-[440px] gap-0 lg:h-[calc(100dvh-8.5rem)] lg:gap-4"
+    >
       {/* المحادثة (يمين بالـRTL، أول عنصر بالـDOM) */}
       <ChatArea
         active={active}
@@ -192,11 +207,14 @@ export default function AIAssistantPage() {
         fileRef={fileRef}
         textareaRef={textareaRef}
         showToast={showToast}
+        tools={AI_TOOLS}
+        activeTool={activeTool}
+        onToolChange={setActiveTool}
       />
 
       {/* السايدبار (شمال بالـRTL) — قابل للطي بالديسكتوب */}
       <aside
-        className={`hidden shrink-0 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-100 transition-all duration-300 ease-in-out lg:block ${
+        className={`hidden shrink-0 overflow-hidden rounded-[32px] bg-[#0F2A4A] shadow-sm transition-all duration-300 ease-in-out lg:block ${
           sidebarCollapsed ? "lg:w-0 lg:opacity-0" : "lg:w-72 lg:opacity-100"
         }`}
       >
@@ -213,7 +231,7 @@ export default function AIAssistantPage() {
         onClick={() => setSidebarOpen(false)}
       />
       <aside
-        className={`fixed inset-y-0 right-0 z-50 w-[85%] max-w-sm bg-white shadow-2xl transition-transform duration-300 lg:hidden ${
+        className={`fixed inset-y-0 right-0 z-50 w-[85%] max-w-sm bg-[#0F2A4A] shadow-2xl transition-transform duration-300 lg:hidden ${
           sidebarOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
@@ -221,12 +239,13 @@ export default function AIAssistantPage() {
           type="button"
           onClick={() => setSidebarOpen(false)}
           aria-label="إغلاق"
-          className="absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-slate-50 text-slate-500"
+          className="absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white"
         >
           <X size={18} />
         </button>
         <Sidebar {...sidebarProps} />
       </aside>
     </div>
+    </AppShell>
   );
 }

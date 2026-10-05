@@ -6,6 +6,8 @@ import { useAuth } from "@/context/AuthContext";
 import Header from "@/components/Header/Header";
 import Footer from "@/components/Footer/Footer";
 
+const FONT = "'Cairo','Tajawal',system-ui,sans-serif";
+
 export default function AppShell({ children, requireBranch = true, bare = false }) {
   const navigate = useNavigate();
   const { isLoggedIn, isLoading, selectedBranch } = useAuth();
@@ -18,12 +20,13 @@ export default function AppShell({ children, requireBranch = true, bare = false 
   }, [isLoading, isLoggedIn, selectedBranch, requireBranch, navigate]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F7FAFC]">
+    <div dir="rtl" style={{ fontFamily: FONT }} className="flex min-h-screen flex-col bg-[#F7FAFC]">
       <Header />
       <main className="flex-grow pt-16 lg:pt-20">
         {isLoading || blocked ? (
-          <div className="flex min-h-[60vh] items-center justify-center">
-            <Loader2 className="animate-spin text-[#002C5A]" size={30} />
+          <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3" role="status">
+            <Loader2 className="animate-spin text-[#0F8B78]" size={32} aria-hidden="true" />
+            <p className="text-[13px] font-bold text-slate-400">لحظات...</p>
           </div>
         ) : bare ? (
           children

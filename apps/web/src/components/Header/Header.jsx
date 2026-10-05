@@ -8,8 +8,8 @@ import { useAuth } from "../../context/AuthContext";
 
 function HeaderSkeleton() {
   return (
-    <div className="hidden items-center gap-10 lg:flex">
-      <div className="h-4 w-[420px] animate-pulse rounded-full bg-slate-100" />
+    <div className="hidden items-center gap-3 lg:flex">
+      <div className="h-8 w-[300px] animate-pulse rounded-xl bg-slate-100/80" />
     </div>
   );
 }
@@ -18,27 +18,46 @@ function Header() {
   const { isLoggedIn, isLoading } = useAuth();
 
   return (
-    <header className="fixed top-0 right-0 left-0 z-40 w-full border-b border-slate-200 bg-white backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:h-20 lg:px-8">
-        <Logo />
+    <header
+      className="fixed inset-x-0 top-0 z-50 w-full"
+      style={{
+        fontFamily: "'Cairo', system-ui, sans-serif",
+      }}
+    >
+      <div className="relative w-full border-b border-[#E6EDF1]/80 bg-white/92 backdrop-blur-xl">
+        {/* لمعة بسيطة أعلى الهيدر */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#BFE8DD] to-transparent"
+        />
 
-        {isLoading ? (
-          <HeaderSkeleton />
-        ) : isLoggedIn ? (
-          <NavLinksLoggedIn />
-        ) : (
-          <NavLinks />
-        )}
+        <div className="mx-auto flex h-[74px] max-w-[1380px] items-center justify-between px-4 sm:px-6 lg:h-[82px] lg:px-8 xl:px-10">
+          {/* Logo */}
+          <Logo />
 
-        {isLoading ? (
-          <div className="hidden h-9 w-24 animate-pulse rounded-full bg-slate-100 lg:block" />
-        ) : isLoggedIn ? (
-          <UserMenu />
-        ) : (
-          <AuthButtons />
-        )}
+          {/* Desktop Navigation */}
+          <div className="flex min-w-0 flex-1 items-center justify-center px-5">
+            {isLoading ? (
+              <HeaderSkeleton />
+            ) : isLoggedIn ? (
+              <NavLinksLoggedIn />
+            ) : (
+              <NavLinks />
+            )}
+          </div>
 
-        <MobileMenu />
+          {/* Right Actions */}
+          {isLoading ? (
+            <div className="hidden h-10 w-28 animate-pulse rounded-full bg-slate-100 lg:block" />
+          ) : isLoggedIn ? (
+            <UserMenu />
+          ) : (
+            <AuthButtons />
+          )}
+
+          {/* Mobile */}
+          <MobileMenu />
+        </div>
       </div>
     </header>
   );

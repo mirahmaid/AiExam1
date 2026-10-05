@@ -13,6 +13,7 @@ jest.mock('@aws-sdk/client-s3', () => {
     })),
     GetObjectCommand: jest.fn(),
     DeleteObjectCommand: jest.fn(),
+    CreateBucketCommand: jest.fn((input) => ({ createBucket: input })),
   };
 });
 
@@ -30,6 +31,7 @@ describe('S3StorageDriver', () => {
   let service: S3StorageDriver;
 
   beforeEach(async () => {
+    jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         S3StorageDriver,
@@ -102,5 +104,40 @@ describe('S3StorageDriver', () => {
         },
       }),
     );
+  });
+
+  describe('missing bucket', () => {
+    const { Upload } = jest.requireMock('@aws-sdk/lib-storage');
+    const noSuchBucket = Object.assign(new Error('The specified bucket does not exist'), { name: 'NoSuchBucket' });
+    const driverWith = (endpoint: string) =>
+      new S3StorageDriver({
+        get: (key: string) =>
+          ({
+            AWS_REGION: 'us-east-1',
+            AWS_ACCESS_KEY_ID: 'k',
+            AWS_SECRET_ACCESS_KEY: 's',
+            AWS_S3_BUCKET_NAME: 'ai-exam-bank-storage',
+            AWS_S3_ENDPOINT: endpoint,
+          })[key],
+      } as any);
+
+    it('creates the bucket on MinIO and retries the upload once', async () => {
+      Upload.mockImplementationOnce(() => ({ done: jest.fn().mockRejectedValue(noSuchBucket) }));
+      const driver = driverWith('http://localhost:9000');
+      const send = (driver as any).s3.send as jest.Mock;
+
+      await expect(driver.uploadFile('a.pdf', Buffer.from('x'), 'application/pdf')).resolves.toBe('a.pdf');
+      expect(send).toHaveBeenCalledWith({ createBucket: { Bucket: 'ai-exam-bank-storage' } });
+      expect(Upload).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not create buckets on AWS — reports a clear error instead', async () => {
+      Upload.mockImplementationOnce(() => ({ done: jest.fn().mockRejectedValue(noSuchBucket) }));
+      const driver = driverWith('');
+      await expect(driver.uploadFile('a.pdf', Buffer.from('x'), 'application/pdf')).rejects.toThrow(
+        'S3 bucket "ai-exam-bank-storage" does not exist',
+      );
+      expect((driver as any).s3.send).not.toHaveBeenCalled();
+    });
   });
 });

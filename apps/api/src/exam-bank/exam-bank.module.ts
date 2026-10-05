@@ -12,29 +12,24 @@ import { StagingService } from './services/staging.service';
 import { HybridSearchService } from './services/hybrid-search.service';
 
 // Processors (BullMQ workers)
-import { ExtractionProcessor } from './processors/extraction.processor';
 import { EmbeddingProcessor } from './processors/embedding.processor';
 
 // Event listeners
 import { EmbeddingListener } from './listeners/embedding.listener';
 
 // Infrastructure modules
-import { StorageModule } from '../storage/storage.module';
 import { GeminiModule } from '../gemini/gemini.module';
+import { KnowledgeModule } from '../knowledge/knowledge.module';
 
 @Module({
   imports: [
-    StorageModule,
     GeminiModule,
+    // رفع الامتحانات واستخراجها صار بخط المعالجة تبع قاعدة المعرفة
+    KnowledgeModule,
     // بدون Redis ما منسجّل الطوابير ولا الـ workers — وإلا بيضلوا
     // يحاولوا الاتصال ويغرقوا الـ log وقت الإقلاع
     ...(QUEUES_ENABLED
-      ? [
-          BullModule.registerQueue(
-            { name: 'exam-extraction' },
-            { name: 'question-embedding' },
-          ),
-        ]
+      ? [BullModule.registerQueue({ name: 'question-embedding' })]
       : []),
   ],
   controllers: [ExamBankController, StagingController],
@@ -43,7 +38,7 @@ import { GeminiModule } from '../gemini/gemini.module';
     StagingService,
     HybridSearchService,
     EmbeddingListener,
-    ...(QUEUES_ENABLED ? [ExtractionProcessor, EmbeddingProcessor] : []),
+    ...(QUEUES_ENABLED ? [EmbeddingProcessor] : []),
   ],
 })
 export class ExamBankModule {}

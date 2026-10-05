@@ -14,7 +14,10 @@ import {
   ParseFilePipe,
   MaxFileSizeValidator,
   FileTypeValidator,
+  BadRequestException,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
@@ -28,7 +31,15 @@ import { CurrentUser, Roles } from '../../common';
 import type { User } from '@prisma/client';
 import { ExamBankService } from '../services/exam-bank.service';
 import { HybridSearchService } from '../services/hybrid-search.service';
-import { UploadExamDto, HybridSearchDto, UpdateBankQuestionDto } from '../dto';
+import {
+  UploadExamDto,
+  HybridSearchDto,
+  UpdateBankQuestionDto,
+  BankListDto,
+  CreateBankQuestionDto,
+  BulkBankActionDto,
+  ImportCsvDto,
+} from '../dto';
 
 @ApiTags('Exam Bank')
 @ApiBearerAuth('access-token')
@@ -104,6 +115,72 @@ export class ExamBankController {
   @ApiResponse({ status: 200, description: 'RRF-fused search results' })
   async search(@Query() dto: HybridSearchDto) {
     return this.hybridSearchService.search(dto);
+  }
+
+  // ── Question bank (admin dashboard) ───────────────────────
+
+  @Roles(Role.ADMIN)
+  @Get('questions')
+  @ApiOperation({ summary: '[ADMIN] List bank questions with filters and text search' })
+  async listQuestions(@Query() q: BankListDto) {
+    return this.examBankService.listBank(q);
+  }
+
+  @Roles(Role.ADMIN)
+  @Get('stats')
+  @ApiOperation({ summary: '[ADMIN] Bank totals by embedding status' })
+  async stats() {
+    return this.examBankService.bankStats();
+  }
+
+  @Roles(Role.ADMIN)
+  @Post('questions')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: '[ADMIN] Add a question to the bank manually' })
+  async createQuestion(@Body() dto: CreateBankQuestionDto) {
+    return this.examBankService.createBankQuestion(dto);
+  }
+
+  @Roles(Role.ADMIN)
+  @Post('questions/bulk')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '[ADMIN] Re-embed, change difficulty or delete several questions' })
+  async bulk(@Body() dto: BulkBankActionDto) {
+    return this.examBankService.bulk(dto);
+  }
+
+  @Roles(Role.ADMIN)
+  @Get('export')
+  @ApiOperation({ summary: '[ADMIN] Export bank questions as CSV (same filters as the list)' })
+  async exportCsv(@Query() q: BankListDto, @Res() res: Response) {
+    const csv = await this.examBankService.exportCsv(q);
+    res.set({
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="question-bank.csv"',
+      'Cache-Control': 'private, no-store',
+    });
+    res.send(csv);
+  }
+
+  @Roles(Role.ADMIN)
+  @Post('import')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: '[ADMIN] Import bank questions from CSV into one subject' })
+  async importCsv(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: ImportCsvDto,
+  ) {
+    if (!file) throw new BadRequestException('CSV file is required');
+    return this.examBankService.importCsv(dto.subjectId, file.buffer.toString('utf8'));
+  }
+
+  @Roles(Role.ADMIN)
+  @Get('questions/:id/similar')
+  @ApiOperation({ summary: '[ADMIN] Nearest bank questions by embedding' })
+  async similar(@Param('id') id: string) {
+    return this.examBankService.similarQuestions(id);
   }
 
   // ── US-13: Question CRUD ──────────────────────────────────

@@ -102,3 +102,15 @@ export function resolveExamMimeType(
 
   return null;
 }
+
+/**
+ * اسم الملف الأصلي كما كتبه المستخدم. multer (busboy) بيفك اسم الملف
+ * بالـ multipart كـ latin1، والمتصفحات بتبعته UTF-8 — فـ«اللغة العربية.pdf»
+ * كان يوصل «Ø§ÙÙØºØ©.pdf». منرجّع البايتات ومنفكها UTF-8؛ إذا الناتج مش
+ * UTF-8 سليم (اسم latin1 أصلي) منترك الاسم زي ما هو.
+ */
+export function decodeUploadName(name: string): string {
+  if (!/[\u0080-ÿ]/.test(name) || /[^\u0000-ÿ]/.test(name)) return name;
+  const decoded = Buffer.from(name, 'latin1').toString('utf8');
+  return decoded.includes('�') ? name : decoded;
+}

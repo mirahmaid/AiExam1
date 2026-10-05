@@ -4,6 +4,7 @@ import {
   S3Client,
   GetObjectCommand,
   DeleteObjectCommand,
+  CreateBucketCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Upload } from '@aws-sdk/lib-storage';
@@ -19,6 +20,8 @@ export class S3StorageDriver implements StorageDriver {
   private readonly logger = new Logger(S3StorageDriver.name);
   private readonly s3: S3Client;
   private readonly bucket: string;
+  /** MinIO/R2 محلي (endpoint مخصص) — مش AWS */
+  private readonly selfHosted: boolean;
 
   constructor(private readonly config: ConfigService) {
     const region = this.config.get<string>('AWS_REGION');
@@ -26,6 +29,7 @@ export class S3StorageDriver implements StorageDriver {
     const accessKeyId = this.config.get<string>('AWS_ACCESS_KEY_ID');
     const secretAccessKey = this.config.get<string>('AWS_SECRET_ACCESS_KEY');
     this.bucket = this.config.get<string>('AWS_S3_BUCKET_NAME') || '';
+    this.selfHosted = Boolean(endpoint);
 
     const s3Config: ConstructorParameters<typeof S3Client>[0] = {
       region,
@@ -46,6 +50,34 @@ export class S3StorageDriver implements StorageDriver {
   }
 
   async uploadFile(
+    key: string,
+    body: Buffer,
+    contentType: string,
+  ): Promise<string> {
+    try {
+      return await this.put(key, body, contentType);
+    } catch (err) {
+      if ((err as { name?: string })?.name !== 'NoSuchBucket') throw err;
+      // MinIO بـ docker-compose بيقوم فاضي وما حدا بيعمل الـ bucket، فكل
+      // رفع كان يرجع 500. على MinIO منعمله أول مرة؛ على AWS الـ bucket
+      // قرار بنية تحتية (صلاحيات، منطقة) فمنرمي خطأ واضح بدل ما ننشئه.
+      if (!this.selfHosted) {
+        throw new Error(
+          `S3 bucket "${this.bucket}" does not exist — create it or fix AWS_S3_BUCKET_NAME`,
+        );
+      }
+      await this.s3
+        .send(new CreateBucketCommand({ Bucket: this.bucket }))
+        .catch((e: { name?: string }) => {
+          // نسخة تانية من السيرفر سبقتنا — مش مشكلة
+          if (e?.name !== 'BucketAlreadyOwnedByYou') throw e;
+        });
+      this.logger.warn(`Created missing bucket "${this.bucket}"`);
+      return this.put(key, body, contentType);
+    }
+  }
+
+  private async put(
     key: string,
     body: Buffer,
     contentType: string,

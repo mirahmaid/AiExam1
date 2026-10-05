@@ -47,6 +47,23 @@ enum EmbeddingStatus {
   FAILED
 }
 
+enum KnowledgeSourceKind {
+  BOOK
+  EXAM
+}
+
+/// مراحل خط المعالجة: رفع ← استخراج ← تقطيع ← تضمين ← مفهرس.
+/// CHUNKED = انقطّع وما انعمله تضمين (خيار «التضمين فوراً» مطفي).
+enum IngestionStage {
+  UPLOADED
+  EXTRACTING
+  CHUNKING
+  CHUNKED
+  EMBEDDING
+  INDEXED
+  FAILED
+}
+
 model User {
   id                    String         @id @default(cuid())
   email                 String         @unique
@@ -63,7 +80,8 @@ model User {
   oauthProvider         String?        
   oauthProviderId       String?        
   refreshTokens         RefreshToken[]
-  uploadedExamFiles     ExamFile[]     
+  uploadedExamFiles     ExamFile[]
+  knowledgeDocuments    KnowledgeDocument[]
   styleUploads          StyleSourceUpload[]  @relation("StudentStyleUploads")
   generatedQuestions    GeneratedQuestion[]  @relation("StudentGeneratedQuestions")
   chatSessions          ChatSession[]  @relation("StudentChatSessions")
@@ -97,6 +115,7 @@ model Branch {
   users            User[]
   examFiles        ExamFile[]
   examBankQuestions ExamBankQuestion[]
+  knowledgeDocuments KnowledgeDocument[]
   createdAt        DateTime           @default(now())
 }
 
@@ -113,6 +132,8 @@ model Subject {
   generatedQuestions GeneratedQuestion[]
   chatSessions       ChatSession[]
   teachers           Teacher[]
+  knowledgeDocuments KnowledgeDocument[]
+  knowledgeChunks    KnowledgeChunk[]
   createdAt          DateTime           @default(now())
 
   @@unique([name, branchId])
@@ -140,6 +161,7 @@ model ExamFile {
   subject         Subject         @relation(fields: [subjectId], references: [id])
   uploader        User            @relation(fields: [uploadedBy], references: [id])
   stagedQuestions StagedQuestion[]
+  document        KnowledgeDocument?
 
   @@index([branchId])
   @@index([subjectId])
@@ -156,8 +178,17 @@ model StagedQuestion {
   correctAnswer   String                
   explanation     String?               
   status          StagedQuestionStatus  @default(PENDING)
-  reviewedBy      String?               
+  reviewedBy      String?
   reviewedAt      DateTime?
+  /// رقم السؤال بالورقة الأصلية
+  number          Int?
+  /// ثقة النموذج بالاستخراج (0..1)
+  confidence      Float?
+  /// تنبيهات للمراجع: بدون شرح، 3 خيارات، الإجابة مش بين الخيارات...
+  flags           String[]              @default([])
+  suggestedDifficulty DifficultyLevel?
+  suggestedBloom  BloomTaxonomyLevel?
+  suggestedUnit   String?
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
@@ -188,6 +219,8 @@ model ExamBankQuestion {
   embedding       Float[]             @default([])
   // tsvector column for full-text search (auto-populated by PostgreSQL trigger / queries)
   searchVector    Unsupported("tsvector")?
+  /// كم مرة انستعمل السؤال مرجعاً بتوليد الأسئلة
+  usageCount      Int                 @default(0)
   deletedAt       DateTime?           // Soft delete timestamp
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -206,6 +239,87 @@ model ExamBankQuestion {
   // شكل الاستعلام الفعلي بكل مسارات الاسترجاع: deletedAt IS NULL +
   // subjectId + difficulty. الفهارس المفردة فوق ما بتغطيه.
   @@index([deletedAt, subjectId, difficulty])
+}
+
+/// ملف دخل قاعدة المعرفة (كتاب مدرسي أو امتحان) ومهمة معالجته بنفس السجل.
+/// خيارات المعالجة بتنحفظ مع الملف حتى إعادة المحاولة تمشي بنفس الإعدادات.
+model KnowledgeDocument {
+  id            String              @id @default(cuid())
+  kind          KnowledgeSourceKind
+  originalName  String
+  s3Key         String              @unique
+  mimeType      String
+  fileSize      Int
+  pageCount     Int?
+  subjectId     String
+  branchId      String
+  /// للامتحانات: ملف ExamFile المرتبط (الأسئلة المستخرجة معلّقة عليه)
+  examFileId    String?             @unique
+  /// للكتب: "1" أو "2" أو "all"
+  bookPart      String?
+  bookEdition   Int?
+  /// IngestionOptions — انظر knowledge/knowledge.types.ts
+  options       Json
+  stage         IngestionStage      @default(UPLOADED)
+  /// 0..100 داخل المرحلة الحالية
+  progress      Int                 @default(0)
+  failedStage   IngestionStage?
+  error         String?
+  /// أسطر السجل: [{ at, level, step, message }]
+  log           Json                @default("[]")
+  /// مدة كل مرحلة بالمللي ثانية: { EXTRACTING: 38000, ... }
+  stageTimings  Json                @default("{}")
+  chunkCount    Int                 @default(0)
+  questionCount Int                 @default(0)
+  uploadedBy    String
+  finishedAt    DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  subject       Subject             @relation(fields: [subjectId], references: [id])
+  branch        Branch              @relation(fields: [branchId], references: [id])
+  examFile      ExamFile?           @relation(fields: [examFileId], references: [id], onDelete: Cascade)
+  uploader      User                @relation(fields: [uploadedBy], references: [id])
+  chunks        KnowledgeChunk[]
+
+  @@index([kind, createdAt])
+  @@index([subjectId])
+  @@index([stage])
+}
+
+/// مقطع نصي من كتاب، مع متجه التضمين تبعه للبحث الهجين.
+model KnowledgeChunk {
+  id              String          @id @default(cuid())
+  documentId      String
+  subjectId       String
+  ordinal         Int
+  pageStart       Int
+  pageEnd         Int
+  /// مسار العناوين: "الوحدة 3 › الحموض والقواعد › ثابت التأين"
+  section         String?
+  /// أعلى عنوان بالمسار — بيستعمل كوحدة بالفلترة
+  unit            String?
+  text            String
+  tokens          Int
+  embeddingStatus EmbeddingStatus @default(PENDING)
+  embedding       Float[]         @default([])
+  embeddingModel  String?
+  createdAt       DateTime        @default(now())
+
+  document        KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  subject         Subject           @relation(fields: [subjectId], references: [id])
+
+  @@unique([documentId, ordinal])
+  @@index([subjectId, embeddingStatus])
+  @@index([subjectId, unit])
+}
+
+/// إعدادات عامة بصيغة مفتاح/قيمة (مثلاً خيارات المعالجة الافتراضية).
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?
+  updatedAt DateTime @updatedAt
 }
 
 

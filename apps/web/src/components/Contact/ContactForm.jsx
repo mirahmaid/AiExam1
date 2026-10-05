@@ -1,168 +1,205 @@
 import { useState } from "react";
+import {
+  CheckCircle2,
+  LoaderCircle,
+  Mail,
+  Phone,
+  Send,
+  UserRound,
+} from "lucide-react";
 
-function getStatus(field) {
-  if (field.value.trim().length > 0) return "filled";
-  if (field.touched) return "error";
-  return "idle";
+/* =====================================================
+   الحقول (كل حقل بياناته وشرط صحته في مكان واحد)
+===================================================== */
+
+const FIELDS = [
+  {
+    name: "fullName",
+    label: "الاسم الكامل",
+    placeholder: "اسمك الكامل",
+    type: "text",
+    icon: UserRound,
+    error: "اكتب اسمك (٣ أحرف على الأقل)",
+    isValid: (v) => v.trim().length >= 3,
+  },
+  {
+    name: "email",
+    label: "البريد الإلكتروني",
+    placeholder: "البريد الإلكتروني",
+    type: "email",
+    icon: Mail,
+    error: "اكتب بريد إلكتروني صحيح",
+    isValid: (v) => /^\S+@\S+\.\S+$/.test(v.trim()),
+  },
+  {
+    name: "phone",
+    label: "رقم الهاتف",
+    placeholder: "رقم الهاتف",
+    type: "tel",
+    icon: Phone,
+    error: "اكتب رقم هاتف صحيح",
+    isValid: (v) => /^\+?[\d\s-]{9,15}$/.test(v.trim()),
+  },
+  {
+    name: "message",
+    label: "الرسالة",
+    placeholder: "اكتب رسالتك هنا...",
+    textarea: true,
+    error: "الرسالة قصيرة (١٠ أحرف على الأقل)",
+    isValid: (v) => v.trim().length >= 10,
+  },
+];
+
+const emptyValues = { fullName: "", email: "", phone: "", message: "" };
+
+function inputClass(hasError, hasIcon) {
+  const base =
+    "peer w-full rounded-2xl border bg-[#F8FAFC] py-4 text-right text-sm font-medium text-[#0F2A4A] outline-none transition-all duration-300 placeholder:text-[#A7B3C0] focus:bg-white focus:ring-4";
+  const padding = hasIcon ? "pl-5 pr-12" : "px-5";
+  const color = hasError
+    ? "border-red-300 focus:border-red-400 focus:ring-red-400/10"
+    : "border-[#E3EAF0] focus:border-[#2DD4BF] focus:ring-[#2DD4BF]/15";
+
+  return `${base} ${padding} ${color}`;
 }
 
-function StepDot({ status, isLast, isFirst, alignTop }) {
-  const finalStatus = isFirst && status === "idle" ? "filled" : status;
-
-  let dotColor = "bg-slate-300";
-  let ringColor = "bg-slate-200/50 scale-75";
-
-  if (finalStatus === "filled") {
-    dotColor = "bg-[#4FB8EF]";
-    ringColor = "bg-[#6EC3F5]/30 scale-100";
-  } else if (finalStatus === "error") {
-    dotColor = "bg-red-500";
-    ringColor = "bg-red-500/20 scale-100";
-  }
-
-  return (
-    <div
-      className={`relative flex h-full w-full justify-center ${
-        alignTop ? "items-start pt-[52px]" : "items-center"
-      }`}
-    >
-      {!isLast && (
-        <span
-          className="absolute top-1/2 z-0 w-[2px] bg-gradient-to-b from-slate-200 via-[#6EC3F5]/40 to-slate-200"
-          style={{ height: "calc(100% + 2rem)" }}
-        />
-      )}
-
-      <span className="relative z-10 flex items-center justify-center">
-        <span className={`absolute h-7 w-7 rounded-full transition-all duration-500 ${ringColor}`} />
-        <span className={`relative h-3.5 w-3.5 rounded-full shadow-sm transition-all duration-300 ${dotColor}`} />
-      </span>
-    </div>
-  );
-}
-
-const emptyField = { value: "", touched: false };
-
-const initialFields = {
-  fullName: { ...emptyField },
-  email: { ...emptyField },
-  phone: { ...emptyField },
-  message: { ...emptyField },
-};
+/* =====================================================
+   COMPONENT
+===================================================== */
 
 function ContactForm() {
-  const [fields, setFields] = useState(initialFields);
-  const [sending, setSending] = useState(false);
+  const [values, setValues] = useState(emptyValues);
+  const [touched, setTouched] = useState({});
+  const [status, setStatus] = useState("idle"); // idle | sending | sent | error
 
   function handleChange(e) {
     const { name, value } = e.target;
-
-    setFields((prev) => ({
-      ...prev,
-      [name]: { ...prev[name], value },
-    }));
+    setValues((prev) => ({ ...prev, [name]: value }));
+    setStatus("idle");
   }
 
   function handleBlur(name) {
-    setFields((prev) => ({
-      ...prev,
-      [name]: { ...prev[name], touched: true },
-    }));
+    setTouched((prev) => ({ ...prev, [name]: true }));
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setSending(true);
 
-    console.log("البيانات المدخلة:", {
-      fullName: fields.fullName.value,
-      email: fields.email.value,
-      phone: fields.phone.value,
-      message: fields.message.value,
-    });
+    // إذا في حقل غلط، نظهر الأخطاء ونوقف
+    const hasErrors = FIELDS.some((f) => !f.isValid(values[f.name]));
+    if (hasErrors) {
+      setTouched({ fullName: true, email: true, phone: true, message: true });
+      return;
+    }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    setStatus("sending");
 
-    setSending(false);
-    setFields({
-      fullName: { ...emptyField },
-      email: { ...emptyField },
-      phone: { ...emptyField },
-      message: { ...emptyField },
-    });
+    try {
+      // TODO: استبدلها بطلب حقيقي للباك اند
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      setValues(emptyValues);
+      setTouched({});
+      setStatus("sent");
+    } catch {
+      setStatus("error");
+    }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto mt-8 flex max-w-lg flex-col gap-6">
-      <div className="grid grid-cols-[28px_1fr] items-stretch gap-x-6 gap-y-5">
-        <StepDot status={getStatus(fields.fullName)} isFirst />
-        <input
-          type="text"
-          name="fullName"
-          placeholder="إسمك كامل"
-          value={fields.fullName.value}
-          onChange={handleChange}
-          onBlur={() => handleBlur("fullName")}
-          required
-          className="contact-field rounded-full border border-slate-200 bg-slate-50/50 px-6 py-3.5 text-right text-base outline-none transition-all duration-300 placeholder:text-slate-400 focus:border-[#4FB8EF] focus:bg-white focus:shadow-[0_0_0_4px_rgba(79,184,239,0.15)]"
-        />
+    <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      {FIELDS.map((field) => {
+        const { name, label, placeholder, type, icon: Icon, error } = field;
+        const showError = touched[name] && !field.isValid(values[name]);
 
-        <StepDot status={getStatus(fields.email)} />
-        <input
-          type="email"
-          name="email"
-          placeholder="البريد الإلكتروني"
-          value={fields.email.value}
-          onChange={handleChange}
-          onBlur={() => handleBlur("email")}
-          required
-          className="contact-field rounded-full border border-slate-200 bg-slate-50/50 px-6 py-3.5 text-right text-base outline-none transition-all duration-300 placeholder:text-slate-400 focus:border-[#4FB8EF] focus:bg-white focus:shadow-[0_0_0_4px_rgba(79,184,239,0.15)]"
-        />
+        const shared = {
+          id: name,
+          name,
+          placeholder,
+          value: values[name],
+          onChange: handleChange,
+          onBlur: () => handleBlur(name),
+          "aria-invalid": showError,
+          "aria-describedby": showError ? `${name}-error` : undefined,
+          className: inputClass(showError, Boolean(Icon)),
+        };
 
-        <StepDot status={getStatus(fields.phone)} />
-        <input
-          type="tel"
-          name="phone"
-          placeholder="رقم الهاتف"
-          value={fields.phone.value}
-          onChange={handleChange}
-          onBlur={() => handleBlur("phone")}
-          required
-          className="contact-field rounded-full border border-slate-200 bg-slate-50/50 px-6 py-3.5 text-right text-base outline-none transition-all duration-300 placeholder:text-slate-400 focus:border-[#4FB8EF] focus:bg-white focus:shadow-[0_0_0_4px_rgba(79,184,239,0.15)]"
-        />
+        return (
+          <div key={name} className="contact-field">
+            <label htmlFor={name} className="sr-only">
+              {label}
+            </label>
 
-        <StepDot status={getStatus(fields.message)} isLast alignTop />
-        <textarea
-          name="message"
-          placeholder="الرسالة"
-          rows={6}
-          value={fields.message.value}
-          onChange={handleChange}
-          onBlur={() => handleBlur("message")}
-          required
-          className="contact-field resize-none rounded-2xl border border-slate-200 bg-slate-50/50 px-6 py-3.5 text-right text-base outline-none transition-all duration-300 placeholder:text-slate-400 focus:border-[#4FB8EF] focus:bg-white focus:shadow-[0_0_0_4px_rgba(79,184,239,0.15)]"
-        />
+            <div className="relative">
+              {field.textarea ? (
+                <>
+                  <textarea {...shared} rows={5} className={`${shared.className} min-h-[140px] resize-none`} />
+                  <span className="pointer-events-none absolute bottom-3 left-4 text-[11px] font-bold text-[#B3BFCA]">
+                    {values.message.length} حرف
+                  </span>
+                </>
+              ) : (
+                <>
+                  <input {...shared} type={type} />
+                  <Icon
+                    size={17}
+                    aria-hidden="true"
+                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#A7B6C5] transition-colors duration-300 peer-focus:text-[#0F8B78]"
+                  />
+                </>
+              )}
+            </div>
+
+            {showError && (
+              <p id={`${name}-error`} role="alert" className="mt-1.5 pr-1 text-xs font-bold text-red-500">
+                {error}
+              </p>
+            )}
+          </div>
+        );
+      })}
+
+      {/* رسائل الحالة */}
+      <div aria-live="polite" className="min-h-[20px]">
+        {status === "sent" && (
+          <p className="flex items-center gap-2 rounded-2xl border border-[#2DD4BF]/25 bg-[#EAFBF6] px-4 py-3 text-xs font-extrabold text-[#0F8B78]">
+            <CheckCircle2 size={17} />
+            وصلتنا رسالتك، وسنرد عليك قريبًا.
+          </p>
+        )}
+
+        {status === "error" && (
+          <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-extrabold text-red-500">
+            تعذّر إرسال الرسالة. جرّب مرة ثانية بعد قليل.
+          </p>
+        )}
       </div>
 
       <button
         type="submit"
-        disabled={sending}
-        className="group relative mt-2 flex items-center justify-center gap-2 overflow-hidden rounded-full bg-[#002C5A] px-6 py-3.5 font-bold text-white shadow-lg transition-all duration-300 hover:bg-[#003a73] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={status === "sending"}
+        className="group flex w-full items-center justify-center gap-3 rounded-2xl bg-[#0F2A4A] px-6 py-4 text-sm font-black text-white shadow-[0_18px_40px_-18px_rgba(15,42,74,.55)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#0F8B78] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#0F8B78]/40 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        <span className="absolute inset-0 h-full w-full -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
-
-        {sending ? (
+        {status === "sending" ? (
           <>
-            <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
+            <LoaderCircle size={19} className="animate-spin" />
             جاري الإرسال...
           </>
         ) : (
-          "تواصل معنا"
+          <>
+            أرسل الرسالة
+            <Send
+              size={16}
+              aria-hidden="true"
+              className="-scale-x-100 transition-transform duration-300 group-hover:-translate-x-1"
+            />
+          </>
         )}
       </button>
+
+      <p className="text-center text-[11px] font-bold text-[#A0AEBB]">
+        معلوماتك تُستخدم فقط للرد على استفسارك.
+      </p>
     </form>
   );
 }

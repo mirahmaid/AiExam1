@@ -1,11 +1,20 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { BookMarked, Bot, Layers, Play, Trophy } from "lucide-react";
+import { ArrowLeft, BookMarked, Layers, Search, Target } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import PageHeader from "@/components/ui/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import { useBranchSubjects } from "../../../../../lib/subjects";
-import { scorePercent, scoreTone, useQuizHistory } from "../../../../../lib/quiz";
+import { useQuizHistory } from "../../../../../lib/quiz";
+import { useSubjectStats } from "./useSubjectStats";
+import SubjectCard from "./SubjectCard";
+
+const FONT = "'Cairo','Tajawal',system-ui,sans-serif";
+const FILTERS = [
+  ["all", "كل المواد"],
+  ["started", "بدأتها"],
+  ["new", "لم أبدأها"],
+];
 
 export default function QuizzesBySubjectPage() {
   return (
@@ -16,7 +25,7 @@ export default function QuizzesBySubjectPage() {
         title="الكويزات حسب المادة"
         description="تابع مستواك في كل مادة على حدة وابدأ كويزاً جديداً أو اسأل المساعد الذكي مباشرة."
       />
-      <div className="mt-8">
+      <div dir="rtl" style={{ fontFamily: FONT }} className="mt-8">
         <SubjectsGrid />
       </div>
     </AppShell>
@@ -26,26 +35,27 @@ export default function QuizzesBySubjectPage() {
 function SubjectsGrid() {
   const { subjects, isLoading, error, branchName } = useBranchSubjects();
   const { attempts } = useQuizHistory();
+  const { stats, practiced, weakest } = useSubjectStats(subjects, attempts);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
 
-  const stats = useMemo(() => {
-    const map = new Map();
-    for (const s of subjects) {
-      const list = attempts.filter((a) => a.subjectId === s.id);
-      const percents = list.map(scorePercent);
-      map.set(s.id, {
-        count: list.length,
-        best: percents.length ? Math.max(...percents) : 0,
-        avg: percents.length ? Math.round(percents.reduce((x, y) => x + y, 0) / percents.length) : 0,
-      });
-    }
-    return map;
-  }, [subjects, attempts]);
+  const visible = useMemo(
+    () =>
+      subjects.filter((s) => {
+        const started = stats.get(s.id).count > 0;
+        return (
+          (filter === "all" || (filter === "started") === started) &&
+          (!query.trim() || s.title.includes(query.trim()))
+        );
+      }),
+    [subjects, stats, query, filter]
+  );
 
   if (isLoading) {
     return (
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-64 animate-pulse rounded-3xl bg-white" />
+          <div key={i} className="h-80 animate-pulse rounded-[30px] bg-white ring-1 ring-slate-100" />
         ))}
       </div>
     );
@@ -63,80 +73,68 @@ function SubjectsGrid() {
   }
 
   return (
-    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-      {subjects.map((s, i) => {
-        const st = stats.get(s.id);
-        const tone = scoreTone(st.avg);
-        return (
-          <article
-            key={s.id}
-            style={{ animationDelay: `${i * 40}ms` }}
-            className="group flex animate-toast-in flex-col rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-100 transition-all duration-300 [animation-fill-mode:backwards] hover:-translate-y-1 hover:shadow-[0_25px_50px_-25px_rgba(0,44,90,0.35)]"
+    <div className="space-y-5">
+      {/* توصية ذكية */}
+      {weakest && (
+        <div className="relative flex flex-wrap items-center justify-between gap-4 overflow-hidden rounded-[28px] bg-[#0F2A4A] p-5 text-white">
+          <div className="absolute -left-16 -top-16 h-44 w-44 rounded-full bg-[#2DD4BF]/10 blur-3xl" />
+          <div className="relative">
+            <p className="flex items-center gap-2 text-[13px] font-black text-[#9FF6E9]">
+              <Target size={15} aria-hidden="true" />
+              اقتراحنا لك اليوم · جرّبت {practiced} من {subjects.length} مواد
+            </p>
+            <p className="mt-2 text-[18px] font-black">
+              {weakest.title} <span className="text-[#9FF6E9]">({stats.get(weakest.id).avg}%)</span> تستحق جولة تركيز
+            </p>
+          </div>
+          <Link
+            to={`/quizzes?subject=${weakest.id}`}
+            className="relative inline-flex items-center gap-1.5 rounded-full bg-[#2DD4BF] px-5 py-2.5 text-[14px] font-black text-[#0F2A4A] transition hover:-translate-y-0.5"
           >
-            <div className="flex items-start gap-4">
-              <span className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#E8F7F3] to-[#C5E7DE] transition-transform duration-500 group-hover:rotate-3 group-hover:scale-105">
-                <span className="relative h-10 w-10">
-                  <img src={s.icon} alt="" className="h-full w-full object-contain" />
-                </span>
-              </span>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-lg font-bold text-[#002C5A]">{s.title}</h3>
-                <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">
-                  {s.description || "تدرّب على أسئلة مولّدة من امتحانات التوجيهي السابقة"}
-                </p>
-              </div>
-            </div>
+            ابدأ الآن
+            <ArrowLeft size={15} aria-hidden="true" />
+          </Link>
+        </div>
+      )}
 
-            <div className="mt-5 grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-3 text-center">
-              <div>
-                <p className="text-lg font-bold text-[#002C5A]">{st.count}</p>
-                <p className="text-[11px] text-slate-400">محاولة</p>
-              </div>
-              <div>
-                <p className={`text-lg font-bold ${st.count ? tone.text : "text-slate-300"}`}>{st.count ? `${st.avg}%` : "—"}</p>
-                <p className="text-[11px] text-slate-400">المعدل</p>
-              </div>
-              <div>
-                <p className="flex items-center justify-center gap-1 text-lg font-bold text-amber-500">
-                  {st.count ? (
-                    <>
-                      <Trophy size={14} />
-                      {st.best}%
-                    </>
-                  ) : (
-                    <span className="text-slate-300">—</span>
-                  )}
-                </p>
-                <p className="text-[11px] text-slate-400">الأفضل</p>
-              </div>
-            </div>
+      {/* بحث وتصفية */}
+      <div className="flex flex-col gap-2.5 rounded-[26px] bg-white p-3 shadow-sm ring-1 ring-slate-100 md:flex-row md:items-center">
+        <label className="relative flex-1">
+          <Search size={17} aria-hidden="true" className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="ابحث عن مادة..."
+            className="w-full rounded-2xl border-0 bg-[#F7FAFC] py-3 pl-4 pr-11 text-[14px] font-bold text-slate-600 outline-none focus:ring-2 focus:ring-[#0F8B78]/15"
+          />
+        </label>
+        <div className="flex gap-1.5" role="group" aria-label="تصفية المواد">
+          {FILTERS.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilter(key)}
+              aria-pressed={filter === key}
+              className={`rounded-full px-4 py-2.5 text-[13px] font-black transition ${
+                filter === key ? "bg-[#0F2A4A] text-white" : "bg-[#F7FAFC] text-slate-500 hover:bg-[#E8F7F3] hover:text-[#0F8B78]"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-            {st.count > 0 && (
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                <div className={`h-full rounded-full ${tone.bg}`} style={{ width: `${st.avg}%` }} />
-              </div>
-            )}
-
-            <div className="mt-5 flex gap-2">
-              <Link
-                to={`/quizzes?subject=${s.id}`}
-                className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[#002C5A] py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0B3B6E]"
-              >
-                <Play size={15} />
-                ابدأ كويز
-              </Link>
-              <Link
-                to={`/ai-path?subject=${s.id}`}
-                aria-label={`اسأل المساعد الذكي عن ${s.title}`}
-                className="flex items-center justify-center gap-1.5 rounded-full border border-slate-200 px-4 text-sm font-semibold text-slate-600 transition-colors hover:border-[#12897A] hover:text-[#12897A]"
-              >
-                <Bot size={16} />
-                اسأل AI
-              </Link>
-            </div>
-          </article>
-        );
-      })}
+      {visible.length === 0 ? (
+        <EmptyState icon={Search} title="ما لقينا نتائج" description="جرّب كلمة بحث مختلفة أو غيّر التصفية." />
+      ) : (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {visible.map((s, i) => (
+            <SubjectCard key={s.id} subject={s} st={stats.get(s.id)} index={i} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,16 @@
-import { createContext, useContext, useState, useCallback } from "react";
-import { CheckCircle2, XCircle, RefreshCw, X } from "lucide-react";
+import { createContext, useContext, useState, useCallback, useRef } from "react";
+import { CheckCircle2, XCircle, Info, RefreshCw, X } from "lucide-react";
 
 const ToastContext = createContext(null);
+
+const FONT = "'Cairo','Tajawal',system-ui,sans-serif";
+const DURATION = 6000;
+
+const TYPES = {
+  success: { Icon: CheckCircle2, icon: "bg-[#E8F7F3] text-[#0F8B78]", bar: "bg-[#0F8B78]", ring: "ring-[#BFE8DD]" },
+  error: { Icon: XCircle, icon: "bg-rose-50 text-rose-500", bar: "bg-rose-500", ring: "ring-rose-100" },
+  info: { Icon: Info, icon: "bg-sky-50 text-sky-500", bar: "bg-sky-500", ring: "ring-sky-100" },
+};
 
 export function useToast() {
   const context = useContext(ToastContext);
@@ -13,108 +22,127 @@ export function useToast() {
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
+  const timers = useRef(new Map());
+  const counter = useRef(0);
 
-  const dismissToast = useCallback((id) => {
-    setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, isExiting: true } : t)));
-
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 450);
+  const clearTimer = useCallback((id) => {
+    clearTimeout(timers.current.get(id));
+    timers.current.delete(id);
   }, []);
+
+  const dismissToast = useCallback(
+    (id) => {
+      clearTimer(id);
+      setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, isExiting: true } : t)));
+      setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 400);
+    },
+    [clearTimer]
+  );
+
+  const schedule = useCallback(
+    (id, ms) => {
+      clearTimer(id);
+      timers.current.set(id, setTimeout(() => dismissToast(id), ms));
+    },
+    [clearTimer, dismissToast]
+  );
 
   const showToast = useCallback(
     (toast) => {
-      const id = Date.now();
-      setToasts((prev) => [...prev, { ...toast, id, isExiting: false }]);
-
-      setTimeout(() => {
-        dismissToast(id);
-      }, 6000);
+      const id = ++counter.current;
+      // نحتفظ بآخر 3 إشعارات فقط حتى ما تمتلئ الشاشة
+      setToasts((prev) => [...prev, { type: "success", ...toast, id, isExiting: false }].slice(-3));
+      schedule(id, DURATION);
     },
-    [dismissToast]
+    [schedule]
   );
 
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
 
-      <div className="pointer-events-none fixed top-6 right-6 z-[100] flex flex-col items-end gap-3 px-4 max-w-md w-full perspective-[1200px]">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`pointer-events-auto relative overflow-hidden flex w-full flex-col rounded-2xl border p-4 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.15)] backdrop-blur-2xl ${
-              toast.isExiting ? "toast-out" : "toast-in"
-            } ${
-              toast.type === "success"
-                ? "border-[#38B793]/25 bg-white/95 text-[#002C5A]"
-                : "border-red-500/25 bg-white/95 text-slate-950"
-            }`}
-          >
-            <div className="flex items-start gap-3.5 w-full">
-              {toast.type === "success" ? (
-                <div className="rounded-full bg-[#38B793]/15 p-1.5 shrink-0">
-                  <CheckCircle2 size={18} className="text-[#38B793]" />
-                </div>
-              ) : (
-                <div className="rounded-full bg-red-100/80 p-1.5 shrink-0">
-                  <XCircle size={18} className="text-red-500" />
-                </div>
-              )}
+      <div
+        dir="rtl"
+        aria-live="polite"
+        style={{ fontFamily: FONT }}
+        className="pointer-events-none fixed inset-x-0 top-20 z-[100] flex flex-col items-center gap-3 px-4 sm:inset-x-auto sm:left-6 sm:items-start"
+      >
+        {toasts.map((toast) => {
+          const t = TYPES[toast.type] ?? TYPES.success;
+          const Icon = t.Icon;
 
-              <div className="flex-1 text-right pt-0.5">
-                <p className="text-sm font-bold tracking-tight leading-snug">{toast.message}</p>
+          return (
+            <div
+              key={toast.id}
+              role={toast.type === "error" ? "alert" : "status"}
+              onMouseEnter={() => clearTimer(toast.id)}
+              onMouseLeave={() => schedule(toast.id, 2500)}
+              className={`toast-card pointer-events-auto relative flex w-full max-w-sm flex-col overflow-hidden rounded-[24px] bg-white p-4 pb-5 shadow-[0_25px_60px_-20px_rgba(15,42,74,0.35)] ring-1 ${t.ring} ${
+                toast.isExiting ? "toast-out" : "toast-in"
+              }`}
+            >
+              <div className="flex w-full items-start gap-3">
+                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${t.icon}`}>
+                  <Icon size={19} aria-hidden="true" />
+                </span>
 
-                {toast.onRetry && (
-                  <button
-                    onClick={() => {
-                      toast.onRetry?.();
-                      dismissToast(toast.id);
-                    }}
-                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
-                  >
-                    <RefreshCw size={13} />
-                    إعادة المحاولة
-                  </button>
-                )}
+                <div className="flex-1 pt-1.5">
+                  <p className="text-[14px] font-black leading-6 text-[#0F2A4A]">{toast.message}</p>
+
+                  {toast.onRetry && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toast.onRetry?.();
+                        dismissToast(toast.id);
+                      }}
+                      className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-[#0F2A4A] px-3.5 py-1.5 text-[12px] font-black text-white transition hover:bg-[#0F8B78]"
+                    >
+                      <RefreshCw size={12} aria-hidden="true" />
+                      إعادة المحاولة
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => dismissToast(toast.id)}
+                  className="shrink-0 rounded-full p-1.5 text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                  aria-label="إغلاق"
+                >
+                  <X size={16} aria-hidden="true" />
+                </button>
               </div>
 
-              <button
-                onClick={() => dismissToast(toast.id)}
-                className="shrink-0 text-slate-400 transition-colors hover:text-slate-700 rounded-lg p-1.5 hover:bg-slate-100/80"
-                aria-label="إغلاق"
-              >
-                <X size={16} />
-              </button>
+              {/* شريط الوقت */}
+              <div className="absolute inset-x-0 bottom-0 h-1 bg-slate-100">
+                <div className={`toast-progress h-full ${t.bar}`} />
+              </div>
             </div>
-
-            {/* شريط التقدم الزمني السفلي */}
-            <div className="absolute bottom-0 right-0 left-0 h-1 bg-slate-100 overflow-hidden rounded-b-2xl">
-              <div
-                className={`toast-progress h-full ${
-                  toast.type === "success" ? "bg-[#38B793]" : "bg-red-500"
-                }`}
-              />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <style>{`
         @keyframes toastIn {
-          from { opacity: 0; transform: translateX(20px) scale(0.95); }
-          to { opacity: 1; transform: translateX(0) scale(1); }
+          from { opacity: 0; transform: translateY(-14px) scale(0.96); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
         @keyframes toastOut {
-          from { opacity: 1; transform: translateX(0) scale(1); }
-          to { opacity: 0; transform: translateX(20px) scale(0.95); }
+          from { opacity: 1; transform: translateY(0) scale(1); }
+          to { opacity: 0; transform: translateY(-14px) scale(0.96); }
         }
         @keyframes toastProgress {
           from { width: 100%; }
           to { width: 0%; }
         }
-        .toast-in { animation: toastIn 0.35s ease-out forwards; }
+        .toast-in { animation: toastIn 0.35s cubic-bezier(.2,.8,.2,1) forwards; }
         .toast-out { animation: toastOut 0.35s ease-in forwards; }
-        .toast-progress { animation: toastProgress 6s linear forwards; }
+        .toast-progress { animation: toastProgress ${DURATION}ms linear forwards; }
+        .toast-card:hover .toast-progress { animation-play-state: paused; }
+        @media (prefers-reduced-motion: reduce) {
+          .toast-in, .toast-out { animation-duration: 0.01ms; }
+        }
       `}</style>
     </ToastContext.Provider>
   );

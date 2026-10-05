@@ -18,6 +18,8 @@ export interface GeneratedQuestionOutput {
 export interface ReferenceMetadata {
   styleUploadId?: string;
   bankQuestionIds: string[];
+  /** مقاطع الكتاب المدرسي يلي انحطت بالـ prompt */
+  textbookChunkIds?: string[];
 }
 
 /** Style blueprint extracted from a student-uploaded question sheet */

@@ -26,12 +26,14 @@ import { StyleExtractionProcessor } from './processors/style-extraction.processo
 import { StorageModule } from '../storage/storage.module';
 import { GeminiModule } from '../gemini/gemini.module';
 import { RedisModule } from '../redis/redis.module';
+import { KnowledgeModule } from '../knowledge/knowledge.module';
 
 @Module({
   imports: [
     StorageModule,
     GeminiModule,
     RedisModule,
+    KnowledgeModule,
     ...(QUEUES_ENABLED
       ? [BullModule.registerQueue({ name: 'style-extraction-queue' })]
       : []),

@@ -5,20 +5,14 @@ import { useAuth } from "../../../context/AuthContext";
 
 import Header from "../../Header/Header";
 import Footer from "../../Footer/Footer";
-import Hero from "../../Hero";
-import StatsSection from "../../Stats/StatsSection";
-import SubjectsSection from "./components/Subjects/SubjectsSection";
-import TeachersSection from "./components/Teachers/TeachersSection";
-import { BRANCH_IDS as TEACHER_BRANCH_IDS } from "./components/Teachers/teachersData";
-import BooksSection from "./components/Book/BooksSection";
-import HeroSection from "./components/AI/Herosection";
 
-// خريطة معكوسة: من id الفرع لـ track (علمي/أدبي/شرعي/ريادة)
-const BRANCH_ID_TO_TRACK = Object.fromEntries(
-  Object.entries(TEACHER_BRANCH_IDS).map(([track, id]) => [id, track])
-);
+import HomeHero from "./components/HomeHero/HomeHero";
+import Studyhub from "./components/QuickActions/Studyhub";
+import StudyHub from "./components/Book/StudyHub/StudyHub";
+import TeamSection from "./components/Team/TeamSection";
 
-function HomePage() {
+
+export default function HomePage() {
   const navigate = useNavigate();
 
   const {
@@ -31,9 +25,16 @@ function HomePage() {
     if (isLoading) return;
 
     if (!isLoggedIn) {
-      navigate("/login", { replace: true });
-    } else if (!selectedBranch) {
-      navigate("/select-branch", { replace: true });
+      navigate("/login", {
+        replace: true,
+      });
+      return;
+    }
+
+    if (!selectedBranch) {
+      navigate("/select-branch", {
+        replace: true,
+      });
     }
   }, [
     isLoading,
@@ -43,45 +44,78 @@ function HomePage() {
   ]);
 
   useEffect(() => {
-    if (isLoading || !isLoggedIn || !selectedBranch) return;
-
-    window.history.pushState(null, "", window.location.href);
-
-    function handlePopState() {
-      navigate("/login");
+    if (
+      isLoading ||
+      !isLoggedIn ||
+      !selectedBranch
+    ) {
+      return;
     }
 
-    window.addEventListener("popstate", handlePopState);
-    return () =>
-      window.removeEventListener("popstate", handlePopState);
-  }, [isLoading, isLoggedIn, selectedBranch, navigate]);
+    window.history.pushState(
+      null,
+      "",
+      window.location.href
+    );
 
-  if (isLoading || !isLoggedIn || !selectedBranch) {
+    const handlePopState = () => {
+      navigate("/login");
+    };
+
+    window.addEventListener(
+      "popstate",
+      handlePopState
+    );
+
+    return () => {
+      window.removeEventListener(
+        "popstate",
+        handlePopState
+      );
+    };
+  }, [
+    isLoading,
+    isLoggedIn,
+    selectedBranch,
+    navigate,
+  ]);
+
+  if (
+    isLoading ||
+    !isLoggedIn ||
+    !selectedBranch
+  ) {
     return null;
   }
 
-  const teacherTrack = BRANCH_ID_TO_TRACK[selectedBranch.id];
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div
+      dir="rtl"
+      className="min-h-screen overflow-x-hidden bg-[#F7FAFC] font-Ubuntu text-[#102A43]"
+    >
       <Header />
 
-      <main className="flex-grow pt-20">
-        <Hero hideCta />
-        <StatsSection />
-        <SubjectsSection />
-       <TeachersSection 
-  track={teacherTrack}
-  title="نخبة المعلمين"
-  description="كادر تعليمي مؤهل يرافقك خطوة بخطوة نحو النجاح"
-/>
-        <BooksSection />
-        <HeroSection />
+      <main className="pt-20">
+        {/* 01 — Hero */}
+        <HomeHero
+          selectedBranch={selectedBranch}
+        />
+
+        {/* 02 — Quick Actions + Subjects */}
+      <Studyhub />
+
+        {/* 03 — Books + AI */}
+       <StudyHub />
+
+      
+       {/* 04 — Team */}
+<section id="team">
+  <TeamSection />
+</section>
       </main>
 
       <Footer />
     </div>
   );
 }
-
-export default HomePage;

@@ -1,222 +1,238 @@
+
 import { useState } from "react";
-import { Loader2, ArrowRight } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import AuthShell, {
+  EMAIL_REGEX,
+  ErrorBox,
+  SubmitButton,
+} from "../shared/AuthShell";
 import FormInput from "../forgot-password/components/FormInput";
 import PasswordInput from "../reset-password/components/PasswordInput";
-import { usePendingEmail } from "../verify-otp/Pendingverification";
 
-// غيّر هاد الرابط حسب طريقة الـ env عندك (Vite: import.meta.env.VITE_API_URL / CRA: process.env.REACT_APP_API_URL)
 const API_URL = import.meta.env.VITE_API_URL;
+
+const CAPTIONS = [
+  "عرّفنا بنفسك وشغّل أول مدار",
+  "ممتاز! باقي كلمة المرور والشروط",
+  "حسابك جاهز، اضغط إنشاء",
+  "تم إنشاء حسابك 🎉",
+];
+
+// 0 بداية · 1 الاسم والإيميل تمام · 2 كل شي جاهز
+const stageOf = (fd) => {
+  const g = (k) => (fd.get(k) || "").toString();
+
+  if (
+    !g("firstName").trim() ||
+    !g("lastName").trim() ||
+    !EMAIL_REGEX.test(g("email"))
+  ) {
+    return 0;
+  }
+
+  return g("password").length >= 8 &&
+    g("password") === g("confirmPassword") &&
+    fd.get("terms")
+    ? 2
+    : 1;
+};
 
 export default function Register() {
   const navigate = useNavigate();
-  const { setPendingEmail } = usePendingEmail();
+
   const [loading, setLoading] = useState(false);
-
-  const [firstNameError, setFirstNameError] = useState("");
-  const [lastNameError, setLastNameError] = useState("");
-  const [emailError, setEmailError] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [confirmPasswordError, setConfirmPasswordError] = useState("");
-  const [termsError, setTermsError] = useState("");
-
-  // Message Error Back End
-  const [serverError, setServerError] = useState("");
+  const [done, setDone] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [stage, setStage] = useState(0);
 
   const [termsAccepted, setTermsAccepted] = useState(() => {
     const accepted = localStorage.getItem("acceptedTerms");
+
     if (accepted === "true") {
       localStorage.removeItem("acceptedTerms");
       return true;
     }
+
     return false;
   });
+
+  const clear = (k) => () =>
+    setErrors((e) => ({
+      ...e,
+      [k]: "",
+    }));
 
   async function handleSubmit(e) {
     e.preventDefault();
 
-    setFirstNameError("");
-    setLastNameError("");
-    setEmailError("");
-    setPasswordError("");
-    setConfirmPasswordError("");
-    setTermsError("");
-    setServerError("");
+    const fd = new FormData(e.currentTarget);
 
-    const formData = new FormData(e.currentTarget);
-    const firstName = formData.get("firstName");
-    const lastName = formData.get("lastName");
-    const email = formData.get("email");
-    const password = formData.get("password");
-    const confirmPassword = formData.get("confirmPassword");
-    const termsChecked = formData.get("terms");
+    const firstName = fd.get("firstName")?.toString().trim();
+    const lastName = fd.get("lastName")?.toString().trim();
+    const email = fd.get("email")?.toString().trim();
+    const password = fd.get("password")?.toString();
+    const confirmPassword = fd.get("confirmPassword")?.toString();
 
-    let isValid = true;
+    const found = {};
 
-    if (!firstName.trim()) {
-      setFirstNameError("الاسم الأول مطلوب");
-      isValid = false;
-    }
+    if (!firstName) found.firstName = "الاسم الأول مطلوب";
 
-    if (!lastName.trim()) {
-      setLastNameError("الاسم الأخير مطلوب");
-      isValid = false;
-    }
+    if (!lastName) found.lastName = "الاسم الأخير مطلوب";
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email) {
-      setEmailError("البريد الإلكتروني مطلوب");
-      isValid = false;
-    } else if (!emailRegex.test(email)) {
-      setEmailError("الرجاء إدخال بريد إلكتروني صحيح");
-      isValid = false;
+      found.email = "البريد الإلكتروني مطلوب";
+    } else if (!EMAIL_REGEX.test(email)) {
+      found.email = "الرجاء إدخال بريد إلكتروني صحيح";
     }
 
     if (!password) {
-      setPasswordError("كلمة المرور مطلوبة");
-      isValid = false;
+      found.password = "كلمة المرور مطلوبة";
     } else if (password.length < 8) {
-      setPasswordError("كلمة المرور يجب ألا تقل عن 8 أحرف أو أرقام");
-      isValid = false;
+      found.password =
+        "كلمة المرور يجب ألا تقل عن 8 أحرف أو أرقام";
     }
 
     if (!confirmPassword) {
-      setConfirmPasswordError("تأكيد كلمة المرور مطلوب");
-      isValid = false;
+      found.confirm = "تأكيد كلمة المرور مطلوب";
     } else if (password !== confirmPassword) {
-      setConfirmPasswordError("كلمتا المرور غير متطابقتين");
-      isValid = false;
+      found.confirm = "كلمتا المرور غير متطابقتين";
     }
 
-    if (!termsChecked) {
-      setTermsError("يجب الموافقة على الشروط والأحكام");
-      isValid = false;
+    if (!fd.get("terms")) {
+      found.terms = "يجب الموافقة على الشروط والأحكام";
     }
 
-    if (!isValid) return;
+    setErrors(found);
 
-    const fullName = `${firstName.trim()} ${lastName.trim()}`;
+    if (Object.keys(found).length) return;
 
     setLoading(true);
+
     try {
       const res = await fetch(`${API_URL}/api/v1/auth/register`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: fullName, email, password }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: `${firstName} ${lastName}`,
+          email,
+          password,
+        }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (res.status === 201) {
-        // بدل تمرير الإيميل عبر الـ URL (?email=...)، نخزنه مؤقتاً بالـ sessionStorage
-        setPendingEmail(email);
-        // replace: true لأنه ما في معنى ترجع بزر الرجوع لفورم تسجيل
-        // انحفظ أصلاً بالباك اند
-        navigate("/verify-otp", { replace: true });
+        setDone(true);
+
+        setTimeout(() => {
+          navigate("/login", { replace: true });
+        }, 1300);
+
         return;
       }
 
       if (res.status === 409) {
-        setEmailError("هذا البريد الإلكتروني مسجل مسبقاً");
-        return;
+        return setErrors({
+          email: "هذا البريد الإلكتروني مسجل مسبقاً",
+        });
       }
 
-      if (res.status === 400) {
-        setServerError(data.message || "البيانات المدخلة غير صحيحة");
-        return;
-      }
-
-      if (res.status === 429) {
-        setServerError("عدد المحاولات كبير، حاول بعد قليل");
-        return;
-      }
-
-      setServerError("حدث خطأ، حاول مرة أخرى");
+      setErrors({
+        server:
+          res.status === 400
+            ? data.message || "البيانات المدخلة غير صحيحة"
+            : res.status === 429
+            ? "عدد المحاولات كبير، حاول بعد قليل"
+            : "حدث خطأ، حاول مرة أخرى",
+      });
     } catch (error) {
       console.error(error);
-      setServerError("تعذر الاتصال بالسيرفر، تحقق من الإنترنت");
+
+      setErrors({
+        server: "تعذر الاتصال بالسيرفر، تحقق من الإنترنت",
+      });
     } finally {
       setLoading(false);
     }
   }
 
+  const busy = loading || done;
+
   return (
-    <main
-      className="min-h-screen w-full flex items-center justify-center p-4 relative"
-      style={{
-        background: "linear-gradient(to top, #90CDE1 0%, #C4E5EF 50%, #FFFFFF 100%)",
+    <AuthShell
+      stage={done ? 3 : stage}
+      captions={CAPTIONS}
+      gauge="اكتمال حسابك"
+      badge="حساب جديد"
+      title={["أنشئ حسابك", "وابدأ رحلتك"]}
+      subtitle="خطوات بسيطة، والبداية تكون مع مسار."
+      back={{
+        to: "/login",
+        label: "لديك حساب؟ سجّل الدخول",
       }}
     >
-      <div
-        className="bg-white/90 backdrop-blur-md shadow-2xl rounded-3xl p-8 w-full max-w-xl relative"
-        style={{
-          background:
-            "linear-gradient(to top, rgba(200, 235, 245, 0.75) 0%, rgba(235, 247, 252, 0.85) 50%, rgba(255, 255, 255, 0.95) 100%)",
-        }}
+      <form
+        onSubmit={handleSubmit}
+        noValidate
+        className="flex flex-col gap-5"
+        onChange={(e) =>
+          setStage(stageOf(new FormData(e.currentTarget)))
+        }
       >
-        <div className="absolute top-6 right-6">
-          <Link
-            to="/login"
-            className="flex items-center text-slate-700 transition-colors hover:text-[#002C5A]"
-          >
-            <ArrowRight size={22} />
-          </Link>
-        </div>
-
-        <form
-          onSubmit={handleSubmit}
-          className="flex flex-col gap-4 w-full items-center pt-4"
-          noValidate
-        >
-          <div className="text-center mb-2">
-            <h1 className="text-3xl font-bold text-[#002C5A]">
-              انشئ حسابك المجاني
-            </h1>
-            <p className="text-lg text-[#002C5A] mt-1">انشئ حسابك الجديد</p>
-          </div>
-
+        <div className="grid grid-cols-2 gap-4">
           <FormInput
             name="firstName"
-            placeholder="الاسم الأول"
-            disabled={loading}
-            error={firstNameError}
-            onChange={() => setFirstNameError("")}
+            label="الاسم الأول"
+            autoComplete="given-name"
+            disabled={busy}
+            error={errors.firstName}
+            onChange={clear("firstName")}
           />
 
           <FormInput
             name="lastName"
-            placeholder="الاسم الأخير"
-            disabled={loading}
-            error={lastNameError}
-            onChange={() => setLastNameError("")}
+            label="الاسم الأخير"
+            autoComplete="family-name"
+            disabled={busy}
+            error={errors.lastName}
+            onChange={clear("lastName")}
           />
+        </div>
 
-          <FormInput
-            name="email"
-            type="email"
-            placeholder="البريد الإلكتروني"
-            disabled={loading}
-            error={emailError}
-            onChange={() => setEmailError("")}
-          />
+        <FormInput
+          name="email"
+          type="email"
+          dir="ltr"
+          autoComplete="email"
+          label="البريد الإلكتروني"
+          placeholder="example@email.com"
+          disabled={busy}
+          error={errors.email}
+          onChange={clear("email")}
+        />
 
-          <PasswordInput
-            name="password"
-            placeholder="ادخل كلمة سر جديدة"
-            disabled={loading}
-            error={passwordError}
-            onChange={() => setPasswordError("")}
-          />
+        <PasswordInput
+          name="password"
+          autoComplete="new-password"
+          label="كلمة المرور"
+          disabled={busy}
+          error={errors.password}
+          onChange={clear("password")}
+        />
 
-          <PasswordInput
-            name="confirmPassword"
-            placeholder="تأكيد كلمة السر"
-            disabled={loading}
-            error={confirmPasswordError}
-            onChange={() => setConfirmPasswordError("")}
-          />
+        <PasswordInput
+          name="confirmPassword"
+          autoComplete="new-password"
+          label="تأكيد كلمة المرور"
+          disabled={busy}
+          error={errors.confirm}
+          onChange={clear("confirm")}
+        />
 
-          <div className="w-full max-w-md flex items-center justify-start gap-2 px-2 text-right">
+        <div>
+          <div className="flex items-start gap-3 px-1">
             <input
               type="checkbox"
               name="terms"
@@ -224,48 +240,50 @@ export default function Register() {
               checked={termsAccepted}
               onChange={(e) => {
                 setTermsAccepted(e.target.checked);
-                if (e.target.checked) setTermsError("");
+
+                if (e.target.checked) {
+                  clear("terms")();
+                }
               }}
-              className="h-4 w-4 rounded border-slate-300 text-[#10B981] focus:ring-[#10B981] cursor-pointer"
+              className="mt-1 h-5 w-5 cursor-pointer rounded border-slate-300 text-[#0F8B78] focus:ring-[#0F8B78]"
             />
-            <label htmlFor="terms" className="text-xs text-slate-600 cursor-pointer">
-              انا أوافق على{" "}
-              <Link to="/terms" className="text-[#10B981] hover:underline font-medium">
+
+            <label
+              htmlFor="terms"
+              className="cursor-pointer text-base leading-7 text-slate-600"
+            >
+              أوافق على{" "}
+              <Link
+                to="/terms"
+                className="font-bold text-[#0F8B78] hover:underline"
+              >
                 شروط الخدمة وسياسة الخصوصية
               </Link>
             </label>
           </div>
-          {termsError && <p className="text-xs text-red-500 px-2">{termsError}</p>}
 
-          {serverError && (
-            <p className="text-center text-sm text-red-500 w-full max-w-md">
-              {serverError}
+          {errors.terms && (
+            <p
+              role="alert"
+              className="mt-1.5 px-1 text-sm font-bold text-red-500"
+            >
+              {errors.terms}
             </p>
           )}
+        </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex w-full max-w-md items-center justify-center rounded-full bg-[#002C5A] py-3.5 text-sm font-semibold text-white cursor-pointer transition-all hover:bg-[#2f4c6a] active:scale-[0.99] disabled:opacity-70 mt-2"
-          >
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="animate-spin" size={18} />
-                جاري التسجيل...
-              </span>
-            ) : (
-              "سجل الآن"
-            )}
-          </button>
+        <ErrorBox message={errors.server} />
 
-          <p className="text-center text-sm text-slate-500 mt-2">
-            هل لديك حساب ؟{" "}
-            <Link to="/login" className="font-semibold text-[#10B981] hover:underline">
-              تسجيل دخول
-            </Link>
-          </p>
-        </form>
-      </div>
-    </main>
+        <SubmitButton
+          loading={loading}
+          done={done}
+          ready={stage === 2}
+          label="إنشاء الحساب"
+          loadingLabel="جاري إنشاء الحساب..."
+          doneLabel="تم إنشاء حسابك 🎉"
+        />
+      </form>
+    </AuthShell>
   );
 }
+

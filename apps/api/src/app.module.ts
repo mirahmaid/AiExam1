@@ -17,6 +17,7 @@ import { ExamBankModule } from './exam-bank/exam-bank.module';
 import { QuestionsModule } from './questions/questions.module';
 import { ChatModule } from './chat/chat.module';
 import { TeachersModule } from './teachers/teachers.module';
+import { KnowledgeModule } from './knowledge/knowledge.module';
 import { validateEnv } from './config/env.validation';
 import { QUEUES_ENABLED } from './common/queues';
 
@@ -42,6 +43,8 @@ import { QUEUES_ENABLED } from './common/queues';
           connection: {
             host: url.hostname,
             port: parseInt(url.port || '6379', 10),
+            // redis://host:6379/2 → قاعدة 2 (كانت تنتجاهل وكل النسخ تشارك قاعدة 0)
+            db: parseInt(url.pathname.slice(1), 10) || 0,
             username: url.username || undefined,
             password: url.password || undefined,
             tls:
@@ -75,6 +78,7 @@ import { QUEUES_ENABLED } from './common/queues';
     QuestionsModule,
     ChatModule,
     TeachersModule,
+    KnowledgeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

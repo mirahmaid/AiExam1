@@ -23,16 +23,26 @@ export class StagingService {
    * List staged questions with filtering and pagination.
    */
   async list(query: QueryStagedDto) {
-    const { examFileId, status, page = 1, limit = 20 } = query;
+    const { examFileId, status, subjectId, flaggedOnly, page = 1, limit = 20 } = query;
 
-    const where: Record<string, unknown> = {};
+    const where: Prisma.StagedQuestionWhereInput = {};
     if (examFileId) where.examFileId = examFileId;
     if (status) where.status = status;
+    if (subjectId) where.examFile = { subjectId };
+    // «المشكوك فيها»: ثقة أقل من 0.8، أو ما في ثقة أصلاً، أو في تنبيهات
+    if (flaggedOnly) {
+      where.OR = [
+        { confidence: { lt: 0.8 } },
+        { confidence: null },
+        { NOT: { flags: { isEmpty: true } } },
+      ];
+    }
 
     const [data, total] = await Promise.all([
       this.prisma.stagedQuestion.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        // ورقة ورا ورقة، وجوّا الورقة بترتيب الأسئلة
+        orderBy: [{ examFile: { createdAt: 'desc' } }, { number: 'asc' }, { createdAt: 'asc' }],
         skip: (page - 1) * limit,
         take: limit,
         include: {
@@ -43,6 +53,7 @@ export class StagingService {
               subjectId: true,
               year: true,
               term: true,
+              subject: { select: { name: true } },
             },
           },
         },

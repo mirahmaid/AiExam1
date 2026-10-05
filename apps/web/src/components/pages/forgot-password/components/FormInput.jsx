@@ -4,13 +4,19 @@ export default function FormInput({ error, ...props }) {
       <input
         dir="rtl"
         {...props}
-        className={`w-full rounded-full border bg-white px-6 py-3.5 text-right text-sm outline-none transition-all placeholder:text-slate-400 focus:ring-1 disabled:opacity-50 ${
+        className={`w-full rounded-2xl border bg-slate-50 px-5 py-3.5 text-right text-sm outline-none transition-all placeholder:text-slate-400 focus:bg-white disabled:opacity-50 ${
           error
-            ? "border-red-500 text-red-900 focus:border-red-500 focus:ring-red-500"
-            : "border-slate-300 focus:border-[#002C5A] focus:ring-[#002C5A]"
+            ? "border-red-400 text-red-900 focus:border-red-400 focus:ring-2 focus:ring-red-100"
+            : "border-slate-200 focus:border-[#0F8B78] focus:ring-2 focus:ring-[#0F8B78]/10"
         }`}
       />
-      {error && <span className="text-xs text-red-500 px-4 text-right">{error}</span>}
+
+      {error && (
+        <span className="text-xs text-red-500 px-4 text-right">
+          {error}
+        </span>
+      )}
     </div>
   );
+
 }

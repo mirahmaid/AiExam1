@@ -1,98 +1,90 @@
-import { forwardRef, useRef } from "react";
+import { motion } from "framer-motion";
 
-const FeatureCard = forwardRef(
-  (
-    {
-      title = "",
-      description = "",
-      icon = "",
-      bgColor = "",
-      borderColor = "#e5e7eb",
-      borderWidth = 1,
-      radius = {
-        topLeft: 180,
-        topRight: 0,
-        bottomRight: 180,
-        bottomLeft: 180,
-      },
-    },
-    ref
-  ) => {
-    const cardInnerRef = useRef(null);
+/* =====================================================
+   SHARED
+===================================================== */
 
-    function handleMouseMove(e) {
-      if (!cardInnerRef.current) return;
+const AUTOPLAY_MS = 6500;
 
-      const rect = cardInnerRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+/* =====================================================
+   TAB / FEATURE CARD
+===================================================== */
 
-      cardInnerRef.current.style.setProperty("--mouse-x", `${x}px`);
-      cardInnerRef.current.style.setProperty("--mouse-y", `${y}px`);
+function FeatureCard({ item, isActive, playing, onSelect }) {
+  const Icon = item.icon;
 
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-      const rotateX = ((y - centerY) / centerY) * -4;
-      const rotateY = ((x - centerX) / centerX) * 4;
-
-      cardInnerRef.current.style.transform = `
-        perspective(1000px)
-        rotateX(${rotateX}deg)
-        rotateY(${rotateY}deg)
-        translateY(-4px)
-      `;
-    }
-
-    function handleMouseLeave() {
-      if (!cardInnerRef.current) return;
-      cardInnerRef.current.style.transform =
-        "perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0px)";
-    }
-
-    const shapeRadius = `${radius.topLeft}px ${radius.topRight}px ${radius.bottomRight}px ${radius.bottomLeft}px`;
-
-    const isHex = borderColor.startsWith("#");
-    const shadowColor = isHex ? `${borderColor}4D` : "rgba(148, 201, 255, 0.4)";
-
-    return (
-      <div
-        ref={ref}
-        className="feature-card-outer relative h-full group/outer cursor-pointer w-full"
-        style={{ perspective: "1000px" }}
+  return (
+    <li className="shrink-0 lg:shrink">
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-current={isActive}
+        className={`group relative flex w-full items-center gap-3 whitespace-nowrap rounded-full border px-4 py-2.5 text-right transition-all duration-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#0F2A4A]/20 lg:items-start lg:gap-5 lg:whitespace-normal lg:rounded-3xl lg:border-transparent lg:px-6 lg:py-5 ${
+          isActive
+            ? "border-[#0F2A4A]/15 bg-white shadow-[0_20px_50px_-30px_rgba(15,42,74,.35)]"
+            : "border-[#0F2A4A]/10 hover:bg-white/60"
+        }`}
       >
-        <div
-          ref={cardInnerRef}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
-          className="flex w-full min-h-full flex-row items-center justify-start p-6 max-sm:p-4 rounded-2xl border transition-transform duration-200 hover:-translate-y-1 gap-5 max-sm:gap-3 bg-white"
-          style={{
-            border: `${borderWidth}px solid ${borderColor}`,
-            borderRadius: shapeRadius,
-            boxShadow: `inset 0 2px 18px -3px ${shadowColor}`,
-          }}
+        {/* شريط التقدّم (الكبير فقط) */}
+        {isActive && (
+          <motion.span
+            key={String(playing)}
+            aria-hidden="true"
+            initial={{ scaleY: playing ? 0 : 1 }}
+            animate={{ scaleY: 1 }}
+            transition={{
+              duration: playing ? AUTOPLAY_MS / 1000 : 0.3,
+              ease: "linear",
+            }}
+            style={{ backgroundColor: item.deep }}
+            className="absolute bottom-5 right-0 top-5 hidden w-[4px] origin-top rounded-full lg:block"
+          />
+        )}
+
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-300 lg:h-12 lg:w-12 lg:rounded-2xl"
+          style={
+            isActive
+              ? {
+                  backgroundColor: item.color,
+                  color: "#0B1F3A",
+                  boxShadow: `0 0 28px ${item.color}88`,
+                }
+              : { backgroundColor: "#fff", color: "#94A3B8" }
+          }
         >
+          <Icon size={20} aria-hidden="true" />
+        </span>
+
+        <span className="block min-w-0">
           <span
-            className={`relative flex h-16 w-16 max-sm:h-12 max-sm:w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl shadow-sm p-2.5 [&_img]:!w-10 [&_img]:!h-10 [&_img]:!max-w-full [&_img]:!max-h-full [&_img]:!object-contain max-sm:[&_img]:!w-8 max-sm:[&_img]:!h-8 ${
-              bgColor || "bg-slate-50"
+            className={`block text-sm font-black transition-colors sm:text-base lg:text-[22px] lg:leading-[1.4] ${
+              isActive
+                ? "text-[#0F2A4A]"
+                : "text-[#64748B] group-hover:text-[#0F2A4A]"
             }`}
           >
-            <img src={icon} alt="" />
+            {item.label}
           </span>
 
-          <div className="text-right flex-1 min-w-0">
-            <h3 className="text-[17px] max-sm:text-sm font-bold text-[#0F2A4A] leading-tight mb-1.5">
-              {title}
-            </h3>
-            <p className="text-sm max-sm:text-[11px] leading-6 max-sm:leading-4 text-[#6B7A90]">
-              {description}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-);
-
-FeatureCard.displayName = "FeatureCard";
+          {/* الوصف: للشاشات الكبيرة فقط */}
+          <motion.span
+            initial={false}
+            animate={{
+              height: isActive ? "auto" : 0,
+              opacity: isActive ? 1 : 0,
+            }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            className="hidden overflow-hidden lg:block"
+          >
+            <span className="block pt-2 text-base leading-7 text-[#64748B]">
+              {item.text}
+            </span>
+          </motion.span>
+        </span>
+      </button>
+    </li>
+  );
+}
 
 export default FeatureCard;
